@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurya — Mon espace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="assets/aurya-shared.js"></script>
+<link rel="icon" id="favicon-link" href="" />
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ---------------------------------- STATE ---------------------------------- */
+let profile = null;
+let items = [];
+let projects = [];
+let actuals = {};
+let activeTab = "accueil";
+let prefillProject = null;
+
+let postesFormOpen = false;
+let posteFormType = "revenu";
+let posteFormCat = CATEGORIES_REVENU[0];
+
+let projectsFormOpen = false;
+let suggestionsOpen = true;
+
+let comparatifYear = new Date().getFullYear();
+let comparatifChart = null;
+
+/* appStage: "loading" | "onboarding" | "app" */
+let appStage = "loading";
+
+let fbAuth = null, fbDb = null, currentUser = null;
+function userDocRef(){ return fbDb.collection("auryaUsers").doc(currentUser.uid); }
+
+/* ---------------------------------- STORAGE (Firestore) ---------------------------------- */
+async function loadUserDoc(){
+  try{
+    const snap = await userDocRef().get();
+    if(snap.exists) return snap.data();
+    return null;
+  }catch(e){ console.error("Erreur de lecture Firestore", e); return null; }
+}
+function saveProfile(){ if(currentUser) userDocRef().set({ profile }, { merge:true }).catch(e=>console.error(e)); }
+function saveItems(){ if(currentUser) userDocRef().set({ items }, { merge:true }).catch(e=>console.error(e)); }
+function saveProjects(){ if(currentUser) userDocRef().set({ projects }, { merge:true }).catch(e=>console.error(e)); }
+function saveActuals(){ if(currentUser) userDocRef().set({ actuals }, { merge:true }).catch(e=>console.error(e)); }
+
+/* ---------------------------------- INIT / SESSION ---------------------------------- */
+function goToLogin(){ window.location.href = "connexion.html"; }
+
+async function loadAll(){
+  if(!initFirebaseApp()){
+    document.getElementById("app").innerHTML = `<div class="center-screen"><p class="muted">Configuration Firebase manquante (assets/aurya-shared.js).</p></div>`;
+    return;
+  }
+  fbAuth = firebase.auth();
+  fbDb = firebase.firestore();
+  fbAuth.onAuthStateChanged(async (user) => {
+    if(!user){ goToLogin(); return; }
+    currentUser = user;
+    const data = await loadUserDoc();
+    if(data && data.profile){
+      profile = data.profile; items = data.items||[]; projects = data.projects||[]; actuals = data.actuals||{};
+      appStage = motDePasseExpire(profile) ? "pwdexpired" : "app";
+    } else {
+      appStage = "onboarding";
+    }
+    render();
+  });
+}
+
+function logout(){
+  fbAuth.signOut().then(()=>{ goToLogin(); });
+}
+
+/* ---------------------------------- Changement de mot de passe (partagé) ---------------------------------- */
+async function doChangePassword(oldPwd, newPwd){
+  const cred = firebase.auth.EmailAuthProvider.credential(currentUser.email, oldPwd);
+  await currentUser.reauthenticateWithCredential(cred);
+  await currentUser.updatePassword(newPwd);
+  profile = { ...profile, pwdChangedAt: new Date().toISOString() };
+  delete profile._pwdPlain; // la copie en clair gardée par l'admin devient obsolète dès que le membre change lui-même son mot de passe
+  saveProfile();
+  // Retire aussi le champ côté Firestore (saveProfile ne fait que fusionner, il n'efface pas les champs absents)
+  if(currentUser) userDocRef().update({ "profile._pwdPlain": firebase.firestore.FieldValue.delete() }).catch(()=>{});
+}
+
+function renderPwdExpired(){
+  return `
+  <div class="center-screen" style="background:radial-gradient(circle at 30% 20%, var(--card-light), var(--bg-deep) 70%);">
+    <div class="onboard-box">
+      <div style="text-align:center;margin-bottom:24px;">
+        <img src="${LOGO_WORDMARK}" alt="Aurya" style="height:56px;margin-bottom:14px;" />
+      </div>
+      <div class="card">
+        <h2 class="display" style="font-size:18px;margin-bottom:8px;">🔒 Mot de passe à renouveler</h2>
+        <p class="muted" style="font-size:14px;margin-bottom:16px;">Pour la sécurité de tes données financières, ton mot de passe doit être changé tous les 3 mois. Choisis-en un nouveau pour continuer.</p>
+        <div class="field"><span>Mot de passe actuel</span>
+          <div class="pwd-field"><input id="pwd-current" type="password" autocomplete="current-password" /><button type="button" class="pwd-toggle" data-toggle-target="pwd-current"></button></div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="field"><span>Nouveau mot de passe (8 caractères minimum)</span>
+          <div class="pwd-field"><input id="pwd-new" type="password" autocomplete="new-password" /><button type="button" class="pwd-toggle" data-toggle-target="pwd-new"></button></div>
+        </div>
+        <p id="pwd-feedback" style="display:none;font-size:13px;margin-top:8px;"></p>
+        <div style="height:14px;"></div>
+        <button class="btn btn-primary" id="btn-change-pwd" style="width:100%;">Mettre à jour et continuer →</button>
+        <button class="btn btn-ghost" id="btn-switch-profile" style="width:100%;margin-top:8px;">Se déconnecter</button>
+      </div>
+    </div>
+  </div>`;
+}
+function attachPwdExpiredListeners(){
+  document.querySelectorAll(".pwd-toggle[data-toggle-target]").forEach(btn=>{
+    btn.innerHTML = ICONS.eye;
+    btn.addEventListener("click", ()=>{
+      const input = document.getElementById(btn.dataset.toggleTarget);
+      input.type = input.type === "password" ? "text" : "password";
+    });
+  });
+  document.getElementById("btn-switch-profile").addEventListener("click", logout);
+  document.getElementById("btn-change-pwd").addEventListener("click", async ()=>{
+    const oldPwd = document.getElementById("pwd-current").value;
+    const newPwd = document.getElementById("pwd-new").value;
+    const feedback = document.getElementById("pwd-feedback");
+    feedback.style.display = "none";
+    if(!oldPwd || newPwd.length < 8){
+      feedback.textContent = "Indique ton mot de passe actuel et un nouveau mot de passe d'au moins 8 caractères.";
+      feedback.style.color = "var(--coral)"; feedback.style.display = "block";
+      return;
+    }
+    try{
+      await doChangePassword(oldPwd, newPwd);
+      appStage = "app";
+      render();
+    }catch(e){
+      feedback.textContent = translateAuthError(e.code);
+      feedback.style.color = "var(--coral)"; feedback.style.display = "block";
+    }
+  });
+}
+
+/* ---------------------------------- RENDER ROOT ---------------------------------- */
+function render(){
+  const app = document.getElementById("app");
+  if(appStage === "loading"){
+    app.innerHTML = `<div class="center-screen"><p class="muted">Aurya s'éclaire pour toi...</p></div>`;
+    return;
+  }
+  if(appStage === "onboarding"){
+    app.innerHTML = renderOnboarding();
+    attachOnboardingListeners();
+    return;
+  }
+  if(appStage === "pwdexpired"){
+    app.innerHTML = renderPwdExpired();
+    attachPwdExpiredListeners();
+    return;
+  }
+  app.innerHTML = renderShell();
+  attachShellListeners();
+}
+
+function renderOnboarding(){
+  return `
+  <div class="center-screen" style="background:radial-gradient(circle at 30% 20%, var(--card-light), var(--bg-deep) 70%);">
+    <div class="onboard-box">
+      <div style="text-align:center;margin-bottom:28px;">
+        <img src="${LOGO_WORDMARK}" alt="Aurya" style="height:64px;margin-bottom:14px;" />
+        <p class="display" style="color:var(--royal);font-weight:600;font-size:16px;margin-bottom:10px;">« Chaque euro trouve sa place. »</p>
+        <p class="muted" style="font-size:14px;line-height:1.5;">Aurya transforme le budget en un espace doux et clair, où chaque décision devient plus simple. Une lumière dans le quotidien.</p>
+      </div>
+      <div class="card">
+        <h2 class="display" style="font-size:18px;margin-bottom:16px;">Avant de commencer, dis-nous qui tu es 👋</h2>
+
+        <div class="field"><span>Ton prénom</span><input id="ob-prenom" placeholder="Ex : Camille" /></div>
+        <div style="height:12px;"></div>
+        <div class="field"><span>Ta date de naissance</span><input id="ob-naissance" type="date" /></div>
+        <div style="height:16px;"></div>
+
+        <div class="field"><span>Ta situation</span></div>
+        <div class="type-toggle" style="margin-top:6px;">
+          <button type="button" id="ob-celibataire" style="background:var(--royal);color:var(--card);">🙋 Célibataire</button>
+          <button type="button" id="ob-couple" style="background:var(--bg-deep);color:var(--muted);">💞 En couple</button>
+        </div>
+
+        <div id="ob-revenus-block" style="display:none;margin-top:14px;">
+          <div class="field"><span>Combien de revenus dans le foyer ?</span></div>
+          <div class="type-toggle" style="margin-top:6px;">
+            <button type="button" id="ob-rev-1" style="background:var(--bg-deep);color:var(--muted);">1 revenu</button>
+            <button type="button" id="ob-rev-2" style="background:var(--royal);color:var(--card);">2 revenus</button>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <div class="field"><span>As-tu des enfants ?</span></div>
+          <div class="type-toggle" style="margin-top:6px;">
+            <button type="button" id="ob-enfants-non" style="background:var(--royal);color:var(--card);">Non</button>
+            <button type="button" id="ob-enfants-oui" style="background:var(--bg-deep);color:var(--muted);">Oui</button>
+          </div>
+        </div>
+        <div id="ob-nombre-enfants-block" style="display:none;margin-top:12px;">
+          <div class="field"><span>Combien d'enfants ?</span><input id="ob-nombre-enfants" type="number" min="1" value="1" /></div>
+        </div>
+
+        <div style="height:16px;"></div>
+        <button id="ob-submit" class="btn btn-primary" disabled style="width:100%;">C'est parti →</button>
+        <p class="muted-dark" style="font-size:12px;text-align:center;margin-top:12px;">On garde tout ça bien au chaud, juste pour te connaître un peu mieux 💛</p>
+      </div>
+    </div>
+  </div>`;
+}
+let obState = { situation:"celibataire", nombreRevenus:1, aEnfants:false, nombreEnfants:1 };
+function attachOnboardingListeners(){
+  obState = { situation:"celibataire", nombreRevenus:1, aEnfants:false, nombreEnfants:1 };
+  const prenomInput = document.getElementById("ob-prenom");
+  const submitBtn = document.getElementById("ob-submit");
+  const revenusBlock = document.getElementById("ob-revenus-block");
+  const enfantsBlock = document.getElementById("ob-nombre-enfants-block");
+  const btnCeli = document.getElementById("ob-celibataire");
+  const btnCouple = document.getElementById("ob-couple");
+  const btnRev1 = document.getElementById("ob-rev-1");
+  const btnRev2 = document.getElementById("ob-rev-2");
+  const btnEnfantsNon = document.getElementById("ob-enfants-non");
+  const btnEnfantsOui = document.getElementById("ob-enfants-oui");
+
+  function styleToggle(activeBtn, inactiveBtn){
+    activeBtn.style.background = "var(--royal)"; activeBtn.style.color = "var(--card)";
+    inactiveBtn.style.background = "var(--bg-deep)"; inactiveBtn.style.color = "var(--muted)";
+  }
+
+  function checkValid(){ submitBtn.disabled = !prenomInput.value.trim(); }
+  prenomInput.addEventListener("input", checkValid);
+  checkValid();
+
+  btnCeli.addEventListener("click", ()=>{ obState.situation="celibataire"; obState.nombreRevenus=1; styleToggle(btnCeli, btnCouple); revenusBlock.style.display="none"; });
+  btnCouple.addEventListener("click", ()=>{ obState.situation="couple"; styleToggle(btnCouple, btnCeli); revenusBlock.style.display="block"; });
+  btnRev1.addEventListener("click", ()=>{ obState.nombreRevenus=1; styleToggle(btnRev1, btnRev2); });
+  btnRev2.addEventListener("click", ()=>{ obState.nombreRevenus=2; styleToggle(btnRev2, btnRev1); });
+  btnEnfantsNon.addEventListener("click", ()=>{ obState.aEnfants=false; styleToggle(btnEnfantsNon, btnEnfantsOui); enfantsBlock.style.display="none"; });
+  btnEnfantsOui.addEventListener("click", ()=>{ obState.aEnfants=true; styleToggle(btnEnfantsOui, btnEnfantsNon); enfantsBlock.style.display="block"; });
+
+  submitBtn.addEventListener("click", async () => {
+    submitBtn.disabled = true; submitBtn.textContent = "Un instant...";
+    profile = {
+      prenom: prenomInput.value.trim(),
+      naissance: document.getElementById("ob-naissance").value,
+      situation: obState.situation,
+      nombreRevenus: obState.situation==="couple" ? obState.nombreRevenus : 1,
+      aEnfants: obState.aEnfants,
+      nombreEnfants: obState.aEnfants ? (Number(document.getElementById("ob-nombre-enfants").value) || 1) : 0,
+      email: currentUser? currentUser.email : "",
+    };
+    items = []; projects = []; actuals = {};
+    saveProfile();
+    appStage = "app";
+    render();
+  });
+}
+
+/* ---------------------------------- SHELL ---------------------------------- */
+function computeTotals(srcItems, srcProjects){
+  const it = srcItems || items;
+  const pr = srcProjects || projects;
+  const prevRevenu = it.filter(i=>i.type==="revenu").reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const prevDepenseItems = it.filter(i=>i.type==="depense").reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const prevEpargneProjets = pr.reduce((s,p)=> p.termine? s : s+(Number(p.suggestionMensuelle)||0), 0);
+  const prevDepenseTotal = prevDepenseItems + prevEpargneProjets;
+  return { prevRevenu, prevDepenseItems, prevEpargneProjets, prevDepenseTotal, prevSolde: prevRevenu-prevDepenseTotal };
+}
+
+function renderDashboard(){
+  const bday = birthdayInfo(profile.naissance);
+  const { prevRevenu, prevDepenseTotal, prevEpargneProjets, prevSolde } = computeTotals();
+  const encouragement = ENCOURAGEMENTS[new Date().getDate() % ENCOURAGEMENTS.length];
+  const annualItems = items.filter(i=>i.frequence==="annuel");
+
+  const situationLabel = profile.situation==="couple"
+    ? `💞 En couple · ${Number(profile.nombreRevenus)||1} revenu${(Number(profile.nombreRevenus)||1)>1?'s':''}`
+    : `🙋 Célibataire`;
+  const enfantsLabel = profile.aEnfants ? ` · 👶 ${Number(profile.nombreEnfants)||0} enfant${(Number(profile.nombreEnfants)||0)>1?'s':''}` : "";
+  const situationBadge = `<div class="row" style="margin-top:10px;flex-wrap:wrap;"><span class="pill" style="background:rgba(184,154,106,0.15);color:var(--gold-dim);">${situationLabel}${enfantsLabel}</span></div>`;
+
+  const joursAvantMdp = joursAvantExpirationMdp(profile);
+  let pwdReminderBlock = "";
+  if(joursAvantMdp <= 14){
+    pwdReminderBlock = `
+    <div class="card dashed">
+      <div class="row"><span style="font-size:22px;">🔒</span>
+        <div>
+          <p style="font-weight:600;margin:0;">Ton mot de passe expire dans ${joursAvantMdp} jour${joursAvantMdp>1?'s':''} 🔐</p>
+          <p class="muted" style="font-size:13px;margin:4px 0 0;">Rends-toi dans l'onglet Profil pour le renouveler avant l'échéance.</p>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  let birthdayBlock = "";
+  if(bday && bday.isToday){
+    birthdayBlock = `
+    <div class="card banner-purple">
+      <div class="row">
+        <div style="font-size:28px;">🎉</div>
+        <div>
+          <p class="display" style="font-weight:600;font-size:18px;margin:0;">Joyeux anniversaire ${esc(profile.prenom)} ! 🎉 ${bday.nextAge} ans aujourd'hui</p>
+          <p style="color:#EAE0F7;font-size:14px;margin:4px 0 0;">On espère que cette année sera pleine de belles lumières ✨</p>
+        </div>
+      </div>
+    </div>`;
+  } else if(bday && bday.daysUntil<=60){
+    birthdayBlock = `
+    <div class="card dashed">
+      <div class="between">
+        <div class="row">
+          <div style="font-size:24px;">🎂</div>
+          <div>
+            <p style="font-weight:600;margin:0;">Ton anniversaire approche dans ${bday.daysUntil} jour${bday.daysUntil>1?'s':''} 🎂</p>
+            <p class="muted" style="font-size:13px;margin:4px 0 0;">Envie de te prévoir un petit cadeau ? Crée un projet et mets un peu de côté chaque mois.</p>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-create-gift-project">🎁 Créer un projet</button>
+      </div>
+    </div>`;
+  }
+
+  let annualBlock = "";
+  if(annualItems.length>0){
+    annualBlock = `
+    <div class="card">
+      <div class="row" style="margin-bottom:10px;"><span style="color:var(--gold);">🛡️</span><h3 class="display" style="font-size:16px;">Tes charges annuelles, mensualisées pour toi</h3></div>
+      <p class="muted" style="font-size:14px;margin-bottom:10px;">Pour que la facture ne te fasse jamais peur, on te propose de mettre un peu de côté chaque mois 👇</p>
+      ${annualItems.map(i=>`
+        <div class="list-row">
+          <span>${esc(i.nom)}</span>
+          <span style="color:var(--gold);font-weight:600;">${fmtPrecise(monthlyEquivalent(i))} / mois <span class="muted-dark" style="font-weight:400;">(${fmt(i.montant)}/an)</span></span>
+        </div>`).join("")}
+    </div>`;
+  }
+
+  return `
+    <div class="card" style="background:linear-gradient(135deg, var(--card-light), var(--card));">
+      <div class="between">
+        <div>
+          <h1 class="display" style="font-size:24px;">${getGreeting(profile.prenom)}</h1>
+          <p class="muted" style="font-size:14px;margin-top:4px;">${encouragement}</p>
+          ${situationBadge}
+        </div>
+        <div style="font-size:36px;">🪙</div>
+      </div>
+    </div>
+    ${birthdayBlock}
+    ${pwdReminderBlock}
+    <div class="grid3">
+      <div class="card">
+        <div class="row" style="color:var(--green);margin-bottom:4px;font-size:12px;font-weight:700;">📈 REVENUS PRÉVUS / MOIS</div>
+        <p class="stat-value">${fmt(prevRevenu)}</p>
+      </div>
+      <div class="card">
+        <div class="row" style="color:var(--coral-soft);margin-bottom:4px;font-size:12px;font-weight:700;">📉 DÉPENSES PRÉVUES / MOIS</div>
+        <p class="stat-value">${fmt(prevDepenseTotal)}</p>
+        ${prevEpargneProjets>0 ? `<p class="muted-dark" style="font-size:12px;margin-top:2px;">dont ${fmt(prevEpargneProjets)} pour tes projets</p>` : ""}
+      </div>
+      <div class="card" style="background:${prevSolde>=0?'rgba(111,207,151,0.12)':'rgba(233,106,86,0.12)'};border:1px solid ${prevSolde>=0?'var(--green)':'var(--coral)'};">
+        <div class="row" style="color:${prevSolde>=0?'var(--green)':'var(--coral-soft)'};margin-bottom:4px;font-size:12px;font-weight:700;">🐷 SOLDE PRÉVU / MOIS</div>
+        <p class="stat-value">${prevSolde>=0?'+':''}${fmt(prevSolde)}</p>
+        <p class="muted-dark" style="font-size:12px;margin-top:2px;">${prevSolde>=0? "Tu vises l'équilibre, bravo 👏" : "Ton budget prévu est serré, regarde tes postes"}</p>
+      </div>
+    </div>
+    ${annualBlock}
+    ${renderComparatif()}
+  `;
+}
+
+function renderComparatif(){
+  const { prevRevenu, prevDepenseTotal } = computeTotals();
+  const data = MONTHS_SHORT.map((label, idx)=>{
+    const mk = monthKey(comparatifYear, idx);
+    const a = actuals[mk] || {};
+    return {
+      mois:label,
+      revPrev: Math.round(prevRevenu),
+      revReel: a.revenu!==undefined? Math.round(Number(a.revenu)) : null,
+      depPrev: Math.round(prevDepenseTotal),
+      depReel: a.depense!==undefined? Math.round(Number(a.depense)) : null,
+    };
+  });
+
+  const rows = data.filter(d=>d.revReel!==null || d.depReel!==null).map(d=>{
+    const soldePrev = d.revPrev - d.depPrev;
+    const hasReel = d.revReel!==null && d.depReel!==null;
+    const soldeReel = hasReel? d.revReel-d.depReel : null;
+    const respecte = hasReel && soldeReel>=soldePrev;
+    return `<tr>
+      <td>${d.mois}</td>
+      <td style="text-align:right;color:var(--muted);">${soldePrev>=0?'+':''}${soldePrev} €</td>
+      <td style="text-align:right;">${hasReel? `${soldeReel>=0?'+':''}${soldeReel} €` : '—'}</td>
+      <td style="text-align:right;">${hasReel ? (respecte? `<span class="pill pill-green">✅ Respecté</span>` : `<span class="pill pill-coral">⚠️ À surveiller</span>`) : '<span class="muted-dark">—</span>'}</td>
+    </tr>`;
+  }).join("");
+
+  const now = new Date();
+  return `
+  <div class="card" id="comparatif-card">
+    <div class="between" style="margin-bottom:16px;">
+      <div class="row"><span style="color:var(--gold);">✨</span><h3 class="display" style="font-size:16px;">Prévu vs Réel — vue d'ensemble ${comparatifYear}</h3></div>
+      <div class="row">
+        <button class="btn btn-ghost" id="year-prev" style="padding:6px 10px;">◀</button>
+        <span style="font-weight:600;padding:0 4px;">${comparatifYear}</span>
+        <button class="btn btn-ghost" id="year-next" style="padding:6px 10px;">▶</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="comparatif-canvas"></canvas></div>
+
+    <div class="divider" style="margin:20px 0 14px;"></div>
+    <p class="muted" style="font-size:14px;font-weight:500;margin-bottom:10px;">Encoder mes montants réels d'un mois</p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+      <div class="field" style="width:140px;"><span>Mois</span>
+        <select id="actual-month">${MONTHS_FR.map((m,idx)=>`<option value="${idx}" ${idx===now.getMonth()?'selected':''}>${m}</option>`).join("")}</select>
+      </div>
+      <div class="field" style="width:140px;"><span>Revenus réels</span><input id="actual-revenu" type="number" placeholder="€" /></div>
+      <div class="field" style="width:140px;"><span>Dépenses réelles</span><input id="actual-depense" type="number" placeholder="€" /></div>
+      <button class="btn btn-primary" id="actual-save">${ICONS.plus} Enregistrer</button>
+    </div>
+
+    <div style="margin-top:20px;overflow-x:auto;">
+      <table>
+        <thead><tr><th>Mois</th><th style="text-align:right;">Solde prévu</th><th style="text-align:right;">Solde réel</th><th style="text-align:right;">Statut</th></tr></thead>
+        <tbody>
+          ${rows || `<tr><td colspan="4" style="text-align:center;padding:20px 0;" class="muted-dark">Encode un premier mois pour voir apparaître ton comparatif ✨</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function drawComparatifChart(){
+  const canvas = document.getElementById("comparatif-canvas");
+  if(!canvas) return;
+  const { prevRevenu, prevDepenseTotal } = computeTotals();
+  const data = MONTHS_SHORT.map((label, idx)=>{
+    const mk = monthKey(comparatifYear, idx);
+    const a = actuals[mk] || {};
+    return {
+      mois:label,
+      revPrev: Math.round(prevRevenu),
+      revReel: a.revenu!==undefined? Math.round(Number(a.revenu)) : null,
+      depPrev: Math.round(prevDepenseTotal),
+      depReel: a.depense!==undefined? Math.round(Number(a.depense)) : null,
+    };
+  });
+  if(comparatifChart) comparatifChart.destroy();
+  comparatifChart = new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels: data.map(d=>d.mois),
+      datasets:[
+        {label:'Revenus prévus', data:data.map(d=>d.revPrev), backgroundColor:'#8A7238', borderRadius:4},
+        {label:'Revenus réels', data:data.map(d=>d.revReel), backgroundColor:'#E8B94B', borderRadius:4},
+        {label:'Dépenses prévues', data:data.map(d=>d.depPrev), backgroundColor:'#7A4238', borderRadius:4},
+        {label:'Dépenses réelles', data:data.map(d=>d.depReel), backgroundColor:'#E96A56', borderRadius:4},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{color:'#A9C7C0', font:{family:'Inter', size:11}}, grid:{color:'#256259'} },
+        y:{ ticks:{color:'#A9C7C0', font:{family:'Inter', size:11}}, grid:{color:'#256259'} },
+      },
+      plugins:{ legend:{ labels:{ color:'#F6F1E4', font:{family:'Inter', size:11} } } }
+    }
+  });
+}
+
+function attachDashboardListeners(){
+  drawComparatifChart();
+  const giftBtn = document.getElementById("btn-create-gift-project");
+  if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire 🎁"}; activeTab="projets"; projectsFormOpen=true; render(); });
+
+  document.getElementById("year-prev").addEventListener("click", ()=>{ comparatifYear--; render(); });
+  document.getElementById("year-next").addEventListener("click", ()=>{ comparatifYear++; render(); });
+
+  document.getElementById("actual-save").addEventListener("click", ()=>{
+    const m = Number(document.getElementById("actual-month").value);
+    const rev = document.getElementById("actual-revenu").value;
+    const dep = document.getElementById("actual-depense").value;
+    const mk = monthKey(comparatifYear, m);
+    actuals[mk] = {
+      revenu: rev===""? undefined : Number(rev),
+      depense: dep===""? undefined : Number(dep),
+    };
+    saveActuals();
+    render();
+  });
+}
+
+/* ---------------------------------- POSTES ---------------------------------- */
+function renderPostes(){
+  const revenus = items.filter(i=>i.type==="revenu");
+  const depenses = items.filter(i=>i.type==="depense");
+  const totalRev = revenus.reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const totalDep = depenses.reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const cats = posteFormType==="revenu"? CATEGORIES_REVENU : CATEGORIES_DEPENSE;
+
+  return `
+    <div class="between" style="margin-bottom:20px;">
+      <div>
+        <h2 class="display" style="font-size:20px;">Tes postes</h2>
+        <p class="muted" style="font-size:14px;">Revenus et dépenses, mensuels ou annuels — on s'occupe de tout convertir.</p>
+      </div>
+      ${!postesFormOpen? `<button class="btn btn-primary" id="btn-open-poste">${ICONS.plus} Ajouter</button>` : ""}
+    </div>
+
+    <button class="suggestions-toggle" id="toggle-suggestions">${suggestionsOpen? "▾" : "▸"} Postes courants — ajoute-les en un clic</button>
+    ${suggestionsOpen? renderSuggestions() : ""}
+
+    ${postesFormOpen? `
+    <div class="card">
+      <div class="type-toggle" style="margin-bottom:16px;">
+        <button id="type-revenu" style="background:${posteFormType==='revenu'?'var(--royal)':'var(--bg-deep)'};color:${posteFormType==='revenu'?'var(--card)':'var(--muted)'};">💰 Revenu</button>
+        <button id="type-depense" style="background:${posteFormType==='depense'?'var(--coral)':'var(--bg-deep)'};color:${posteFormType==='depense'?'var(--cream)':'var(--muted)'};">🧾 Dépense</button>
+      </div>
+      <div class="field"><span>Nom du poste</span><input id="poste-nom" value="${esc(posteFieldStash.nom)}" placeholder="${posteFormType==='revenu'? 'Ex : Salaire, Freelance...' : 'Ex : Loyer, Assurance auto...'}" /></div>
+      <div style="height:12px;"></div>
+      <div class="grid2">
+        <div class="field"><span>Catégorie</span><select id="poste-cat">${cats.map(c=>`<option value="${c}" ${c===posteFormCat?'selected':''}>${c}</option>`).join("")}</select></div>
+        <div class="field"><span>Fréquence</span><select id="poste-freq"><option value="mensuel" ${posteFieldStash.frequence==='mensuel'?'selected':''}>Mensuel</option><option value="annuel" ${posteFieldStash.frequence==='annuel'?'selected':''}>Annuel</option></select></div>
+      </div>
+      <div style="height:12px;"></div>
+      <div class="field"><span id="poste-montant-label">Montant (par mois)</span><input id="poste-montant" type="number" value="${esc(posteFieldStash.montant)}" placeholder="€" /></div>
+      <p id="poste-annual-preview" style="display:none;color:var(--gold);font-size:12px;margin-top:8px;"></p>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="poste-save">Enregistrer</button>
+        <button class="btn btn-ghost" id="poste-cancel">Annuler</button>
+      </div>
+    </div>` : ""}
+
+    <div class="card">
+      <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--green);">📈</span><h3 class="display" style="font-size:16px;">Revenus</h3></div><span style="color:var(--green);font-weight:700;">${fmt(totalRev)}/mois</span></div>
+      ${revenus.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste ! ✨</p>` :
+        revenus.map(i=>`
+        <div class="list-row">
+          <div>
+            <p style="margin:0;font-weight:500;">${esc(i.nom)}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}</p>
+          </div>
+          <button class="icon-btn" data-remove="${i.id}">${ICONS.trash}</button>
+        </div>`).join("")}
+    </div>
+
+    <div class="card">
+      <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--coral-soft);">📉</span><h3 class="display" style="font-size:16px;">Dépenses</h3></div><span style="color:var(--coral-soft);font-weight:700;">${fmt(totalDep)}/mois</span></div>
+      ${depenses.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste ! ✨</p>` :
+        depenses.map(i=>`
+        <div class="list-row">
+          <div>
+            <p style="margin:0;font-weight:500;">${esc(i.nom)}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}</p>
+          </div>
+          <button class="icon-btn" data-remove="${i.id}">${ICONS.trash}</button>
+        </div>`).join("")}
+    </div>
+  `;
+}
+
+function groupByCategorie(list){
+  const groups = {};
+  list.forEach(s=>{ (groups[s.categorie] = groups[s.categorie]||[]).push(s); });
+  return groups;
+}
+
+function renderChipGroup(list, type){
+  const groups = groupByCategorie(list);
+  return Object.keys(groups).map(cat=>`
+    <div class="chip-group">
+      <div class="chip-group-title">${esc(cat)}</div>
+      <div class="chips">
+        ${groups[cat].map(s=>{
+          const idx = (type==='revenu'? SUGGESTIONS_REVENUS : SUGGESTIONS_DEPENSES).indexOf(s);
+          return `<button class="chip" data-suggest="${type}:${idx}">${ICONS.smallplus} ${esc(s.nom)} <span class="muted-dark">${s.frequence==='annuel'? '/an':'/mois'}</span></button>`;
+        }).join("")}
+      </div>
+    </div>`).join("");
+}
+
+function renderSuggestions(){
+  return `
+  <div class="card">
+    <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--green);">📈 Revenus courants</h3></div>
+    ${renderChipGroup(SUGGESTIONS_REVENUS, 'revenu')}
+    <div class="divider" style="margin:14px 0;"></div>
+    <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--coral-soft);">📉 Dépenses courantes</h3></div>
+    ${renderChipGroup(SUGGESTIONS_DEPENSES, 'depense')}
+    <p class="muted-dark" style="font-size:12px;margin-top:6px;margin-bottom:0;">Clique sur un poste pour l'ajouter, tu n'auras plus qu'à indiquer le montant 💛</p>
+  </div>`;
+}
+
+function attachPostesListeners(){
+  const openBtn = document.getElementById("btn-open-poste");
+  if(openBtn) openBtn.addEventListener("click", ()=>{ postesFormOpen=true; posteFormType="revenu"; posteFormCat=CATEGORIES_REVENU[0]; posteFieldStash={nom:"",montant:"",frequence:"mensuel"}; render(); });
+
+  const toggleSugg = document.getElementById("toggle-suggestions");
+  if(toggleSugg) toggleSugg.addEventListener("click", ()=>{ suggestionsOpen=!suggestionsOpen; render(); });
+
+  document.querySelectorAll("[data-suggest]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const [type, idxStr] = btn.dataset.suggest.split(":");
+      const sugg = (type==='revenu'? SUGGESTIONS_REVENUS : SUGGESTIONS_DEPENSES)[Number(idxStr)];
+      postesFormOpen = true;
+      posteFormType = type;
+      posteFormCat = sugg.categorie;
+      posteFieldStash = { nom: sugg.nom, montant: "", frequence: sugg.frequence };
+      render();
+      const montantEl = document.getElementById("poste-montant");
+      if(montantEl) montantEl.focus();
+    });
+  });
+
+  if(postesFormOpen){
+    const freqSelect = document.getElementById("poste-freq");
+    const montantInput = document.getElementById("poste-montant");
+    const label = document.getElementById("poste-montant-label");
+    const preview = document.getElementById("poste-annual-preview");
+
+    function updatePreview(){
+      label.textContent = `Montant (${freqSelect.value==='mensuel'? 'par mois' : 'par an'})`;
+      if(freqSelect.value==='annuel' && montantInput.value){
+        preview.style.display='block';
+        preview.textContent = `💡 On te proposera de mettre ${fmtPrecise(Number(montantInput.value)/12)} de côté chaque mois pour cette facture.`;
+      } else { preview.style.display='none'; }
+    }
+    freqSelect.addEventListener("change", updatePreview);
+    montantInput.addEventListener("input", updatePreview);
+    updatePreview();
+
+    document.getElementById("type-revenu").addEventListener("click", ()=>{
+      posteFormType="revenu"; posteFormCat=CATEGORIES_REVENU[0];
+      stashPosteFields(); render();
+    });
+    document.getElementById("type-depense").addEventListener("click", ()=>{
+      posteFormType="depense"; posteFormCat=CATEGORIES_DEPENSE[0];
+      stashPosteFields(); render();
+    });
+
+    document.getElementById("poste-save").addEventListener("click", ()=>{
+      const nom = document.getElementById("poste-nom").value.trim();
+      const montant = document.getElementById("poste-montant").value;
+      if(!nom || !montant) return;
+      items.push({
+        id: uid(), type: posteFormType, nom,
+        categorie: document.getElementById("poste-cat").value,
+        frequence: document.getElementById("poste-freq").value,
+        montant: Number(montant),
+      });
+      saveItems();
+      postesFormOpen=false;
+      render();
+    });
+    document.getElementById("poste-cancel").addEventListener("click", ()=>{ postesFormOpen=false; render(); });
+  }
+
+  document.querySelectorAll("[data-remove]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      items = items.filter(i=>i.id!==btn.dataset.remove);
+      saveItems();
+      render();
+    });
+  });
+}
+let posteFieldStash = {nom:"", montant:"", frequence:"mensuel"};
+function stashPosteFields(){
+  const nomEl = document.getElementById("poste-nom");
+  const montantEl = document.getElementById("poste-montant");
+  const freqEl = document.getElementById("poste-freq");
+  if(nomEl) posteFieldStash.nom = nomEl.value;
+  if(montantEl) posteFieldStash.montant = montantEl.value;
+  if(freqEl) posteFieldStash.frequence = freqEl.value;
+}
+
+/* ---------------------------------- PROJETS ---------------------------------- */
+function monthsRemaining(dateStr){
+  if(!dateStr) return null;
+  const now = new Date();
+  const target = new Date(dateStr+"T00:00:00");
+  const months = (target.getFullYear()-now.getFullYear())*12 + (target.getMonth()-now.getMonth());
+  return Math.max(1, months);
+}
+
+function renderProjets(){
+  return `
+    <div class="between" style="margin-bottom:20px;">
+      <div>
+        <h2 class="display" style="font-size:20px;">Tes projets</h2>
+        <p class="muted" style="font-size:14px;">Un week-end à la mer, un cadeau, un nouveau vélo... on t'aide à y arriver petit à petit.</p>
+      </div>
+      ${!projectsFormOpen? `<button class="btn btn-primary" id="btn-open-projet">${ICONS.plus} Nouveau projet</button>` : ""}
+    </div>
+
+    ${projectsFormOpen? `
+    <div class="card">
+      <div class="field"><span>Nom du projet</span><input id="projet-nom" placeholder="Ex : Week-end à la mer" value="${esc(prefillProject?.nom||'')}" /></div>
+      <div style="height:12px;"></div>
+      <div class="grid2">
+        <div class="field"><span>Budget prévu</span><input id="projet-objectif" type="number" placeholder="Ex : 500 €" /></div>
+        <div class="field"><span>Date visée (optionnel)</span><input id="projet-date" type="date" /></div>
+      </div>
+      <div style="height:12px;"></div>
+      <div class="field"><span id="projet-suggestion-label">Combien mettre de côté chaque mois (conseil : commence petit, ex 50 €)</span><input id="projet-suggestion" type="number" placeholder="50" /></div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="projet-save">Créer le projet</button>
+        <button class="btn btn-ghost" id="projet-cancel">Annuler</button>
+      </div>
+    </div>` : ""}
+
+    ${projects.length===0 && !projectsFormOpen? `<div class="card"><p class="muted-dark" style="text-align:center;">Pas encore de projet. Et si tu te prévoyais une petite escapade ? 🌊</p></div>` : ""}
+
+    <div class="grid2">
+      ${projects.map(p=>renderProjectCard(p)).join("")}
+    </div>
+  `;
+}
+
+function renderProjectCard(p){
+  const now = new Date();
+  const total = Object.values(p.historique||{}).reduce((s,v)=>s+Number(v),0);
+  const pct = Math.min(100, Math.round((total/p.objectif)*100));
+  const reste = Math.max(0, p.objectif-total);
+  const moisPourFinir = p.suggestionMensuelle>0? Math.ceil(reste/p.suggestionMensuelle) : null;
+
+  return `
+  <div class="card" style="border:1px solid ${p.termine? 'var(--green)':'var(--card-lighter)'};">
+    <div class="between" style="align-items:flex-start;margin-bottom:6px;">
+      <div>
+        <h3 class="display" style="font-size:17px;">${esc(p.nom)}</h3>
+        <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">Objectif : ${fmt(p.objectif)}${p.dateCible? ` · pour le ${new Date(p.dateCible+"T00:00:00").toLocaleDateString("fr-BE")}` : ""}</p>
+      </div>
+      <button class="icon-btn" data-remove-projet="${p.id}">${ICONS.trash}</button>
+    </div>
+    ${p.termine? `<p style="color:var(--green);font-weight:600;font-size:14px;margin:12px 0;">🎉 Objectif atteint, bravo !</p>` : `
+    <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
+    <div class="between muted" style="font-size:12px;margin-bottom:10px;">
+      <span>${fmt(total)} épargnés (${pct}%)</span><span>Reste ${fmt(reste)}</span>
+    </div>
+    <p style="color:var(--gold);font-size:12px;margin-bottom:10px;">🪙 Conseil : ${fmt(p.suggestionMensuelle)}/mois${moisPourFinir? ` — à ce rythme, tu y es dans ${moisPourFinir} mois 🚀` : ""}</p>
+    `}
+    <div style="display:flex;gap:8px;align-items:flex-end;">
+      <div class="field" style="flex:1;"><span>Ce mois, j'ai mis de côté</span><input type="number" placeholder="€" id="log-input-${p.id}" /></div>
+      <button class="btn btn-primary" data-log-projet="${p.id}">Ajouter</button>
+    </div>
+  </div>`;
+}
+
+function attachProjetsListeners(){
+  const openBtn = document.getElementById("btn-open-projet");
+  if(openBtn) openBtn.addEventListener("click", ()=>{ projectsFormOpen=true; render(); });
+
+  if(projectsFormOpen){
+    const objectifEl = document.getElementById("projet-objectif");
+    const dateEl = document.getElementById("projet-date");
+    const suggEl = document.getElementById("projet-suggestion");
+    const label = document.getElementById("projet-suggestion-label");
+
+    function updateSuggestion(){
+      if(!objectifEl.value){ label.textContent = "Combien mettre de côté chaque mois (conseil : commence petit, ex 50 €)"; return; }
+      const mr = monthsRemaining(dateEl.value);
+      if(mr){
+        const auto = Math.ceil(Number(objectifEl.value)/mr);
+        label.textContent = `Combien mettre de côté chaque mois (suggestion : ${auto} €)`;
+        suggEl.placeholder = String(auto);
+      } else {
+        label.textContent = "Combien mettre de côté chaque mois (conseil : commence petit, ex 50 €)";
+        suggEl.placeholder = "50";
+      }
+    }
+    objectifEl.addEventListener("input", updateSuggestion);
+    dateEl.addEventListener("change", updateSuggestion);
+
+    document.getElementById("projet-save").addEventListener("click", ()=>{
+      const nom = document.getElementById("projet-nom").value.trim();
+      const objectif = objectifEl.value;
+      if(!nom || !objectif) return;
+      const mr = monthsRemaining(dateEl.value);
+      const autoSugg = mr? Math.ceil(Number(objectif)/mr) : 50;
+      projects.push({
+        id: uid(), nom, objectif: Number(objectif),
+        dateCible: dateEl.value || null,
+        suggestionMensuelle: Number(suggEl.value || autoSugg),
+        historique: {}, termine: false,
+      });
+      saveProjects();
+      projectsFormOpen=false; prefillProject=null;
+      render();
+    });
+    document.getElementById("projet-cancel").addEventListener("click", ()=>{ projectsFormOpen=false; prefillProject=null; render(); });
+  }
+
+  document.querySelectorAll("[data-remove-projet]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      projects = projects.filter(p=>p.id!==btn.dataset.removeProjet);
+      saveProjects(); render();
+    });
+  });
+  document.querySelectorAll("[data-log-projet]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.dataset.logProjet;
+      const input = document.getElementById(`log-input-${id}`);
+      const montant = input.value;
+      if(!montant) return;
+      const now = new Date();
+      const mk = monthKey(now.getFullYear(), now.getMonth());
+      projects = projects.map(p=>{
+        if(p.id!==id) return p;
+        const historique = {...p.historique, [mk]: (Number(p.historique[mk])||0)+Number(montant)};
+        const total = Object.values(historique).reduce((s,v)=>s+Number(v),0);
+        return {...p, historique, termine: total>=p.objectif};
+      });
+      saveProjects(); render();
+    });
+  });
+}
+
+/* ---------------------------------- PROFIL ---------------------------------- */
+function renderProfil(){
+  const bday = birthdayInfo(profile.naissance);
+  const situation = profile.situation || "celibataire";
+  const nombreRevenus = Number(profile.nombreRevenus) || 1;
+  const aEnfants = !!profile.aEnfants;
+  const nombreEnfants = Number(profile.nombreEnfants) || 0;
+  return `
+    <h2 class="display" style="font-size:20px;margin-bottom:16px;">Ton profil</h2>
+    <div class="card" style="max-width:380px;">
+      <div class="field"><span>Prénom</span><input id="profil-prenom" value="${esc(profile.prenom)}" /></div>
+      <div style="height:12px;"></div>
+      <div class="field"><span>Date de naissance</span><input id="profil-naissance" type="date" value="${esc(profile.naissance||'')}" /></div>
+      ${bday? `<p class="muted" style="font-size:12px;margin-top:10px;">Tu as ${bday.age} ans. Prochain anniversaire dans ${bday.daysUntil} jour${bday.daysUntil>1?'s':''} 🎂</p>` : ""}
+
+      <div style="height:16px;"></div>
+      <div class="field"><span>Ta situation</span></div>
+      <div class="type-toggle" style="margin-top:6px;">
+        <button type="button" id="profil-celibataire" style="background:${situation==='celibataire'?'var(--royal)':'var(--bg-deep)'};color:${situation==='celibataire'?'var(--card)':'var(--muted)'};">🙋 Célibataire</button>
+        <button type="button" id="profil-couple" style="background:${situation==='couple'?'var(--royal)':'var(--bg-deep)'};color:${situation==='couple'?'var(--card)':'var(--muted)'};">💞 En couple</button>
+      </div>
+      <div id="profil-revenus-block" style="display:${situation==='couple'?'block':'none'};margin-top:12px;">
+        <div class="field"><span>Combien de revenus dans le foyer ?</span></div>
+        <div class="type-toggle" style="margin-top:6px;">
+          <button type="button" id="profil-rev-1" style="background:${nombreRevenus===1?'var(--royal)':'var(--bg-deep)'};color:${nombreRevenus===1?'var(--card)':'var(--muted)'};">1 revenu</button>
+          <button type="button" id="profil-rev-2" style="background:${nombreRevenus===2?'var(--royal)':'var(--bg-deep)'};color:${nombreRevenus===2?'var(--card)':'var(--muted)'};">2 revenus</button>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="field"><span>As-tu des enfants ?</span></div>
+        <div class="type-toggle" style="margin-top:6px;">
+          <button type="button" id="profil-enfants-non" style="background:${!aEnfants?'var(--royal)':'var(--bg-deep)'};color:${!aEnfants?'var(--card)':'var(--muted)'};">Non</button>
+          <button type="button" id="profil-enfants-oui" style="background:${aEnfants?'var(--royal)':'var(--bg-deep)'};color:${aEnfants?'var(--card)':'var(--muted)'};">Oui</button>
+        </div>
+      </div>
+      <div id="profil-nombre-enfants-block" style="display:${aEnfants?'block':'none'};margin-top:12px;">
+        <div class="field"><span>Combien d'enfants ?</span><input id="profil-nombre-enfants" type="number" min="1" value="${nombreEnfants||1}" /></div>
+      </div>
+
+      <div style="height:20px;border-top:1px solid var(--card-lighter);margin-top:16px;padding-top:16px;">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="profil-consentement" ${profile.consentementAdmin? 'checked':''} style="margin-top:3px;width:16px;height:16px;" />
+          <span style="font-size:13px;color:var(--muted);">Autoriser Hélène à consulter et, si besoin, modifier mes informations pour me conseiller sur mon budget.</span>
+        </label>
+      </div>
+
+      <div style="height:14px;"></div>
+      <button class="btn btn-primary" id="profil-save">Enregistrer</button>
+    </div>
+
+    <div class="card" style="max-width:380px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔑 Ton compte</h3>
+      <p class="muted" style="font-size:13px;margin-bottom:4px;">Identifiant : <strong style="color:var(--royal);">${esc(currentUser? currentUser.email.split('@')[0] : "")}</strong></p>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">☁️ Tes données sont privées, protégées par ton mot de passe, et te suivent automatiquement sur tous tes appareils.</p>
+      <button class="btn btn-ghost" id="btn-switch-profile">🔁 Se déconnecter</button>
+    </div>
+
+    <div class="card" style="max-width:380px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔒 Changer mon mot de passe</h3>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">Si Hélène t'a communiqué un mot de passe généré automatiquement, change-le ici pour un mot de passe que toi seul(e) connais.</p>
+      <div class="field"><span>Mot de passe actuel</span>
+        <div class="pwd-field"><input id="pwd-current" type="password" autocomplete="current-password" /><button type="button" class="pwd-toggle" data-toggle-target="pwd-current"></button></div>
+      </div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Nouveau mot de passe (8 caractères minimum)</span>
+        <div class="pwd-field"><input id="pwd-new" type="password" autocomplete="new-password" /><button type="button" class="pwd-toggle" data-toggle-target="pwd-new"></button></div>
+      </div>
+      <p id="pwd-feedback" style="display:none;font-size:13px;margin-top:8px;"></p>
+      <div style="height:12px;"></div>
+      <button class="btn btn-ghost" id="btn-change-pwd">Mettre à jour le mot de passe</button>
+    </div>
+
+    <div class="card" style="max-width:380px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔒 Tes données sont en sécurité</h3>
+      <p class="muted" style="font-size:13px;margin-bottom:14px;">Tout ce que tu encodes est sauvegardé automatiquement sur ton compte, et reste disponible même si l'application est mise à jour. Tu peux aussi garder une copie de secours sur ton appareil :</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="btn-export">⬇️ Télécharger une sauvegarde</button>
+        <label class="btn btn-ghost" style="cursor:pointer;margin:0;">
+          ⬆️ Restaurer une sauvegarde
+          <input type="file" id="btn-import" accept="application/json" style="display:none;" />
+        </label>
+      </div>
+      <p id="import-feedback" class="muted-dark" style="font-size:12px;margin-top:10px;"></p>
+    </div>
+  `;
+}
+let profilState = null;
+function attachProfilListeners(){
+  profilState = {
+    situation: profile.situation || "celibataire",
+    nombreRevenus: profile.nombreRevenus || 1,
+    aEnfants: !!profile.aEnfants,
+  };
+  const revenusBlock = document.getElementById("profil-revenus-block");
+  const enfantsBlock = document.getElementById("profil-nombre-enfants-block");
+  const btnCeli = document.getElementById("profil-celibataire");
+  const btnCouple = document.getElementById("profil-couple");
+  const btnRev1 = document.getElementById("profil-rev-1");
+  const btnRev2 = document.getElementById("profil-rev-2");
+  const btnEnfantsNon = document.getElementById("profil-enfants-non");
+  const btnEnfantsOui = document.getElementById("profil-enfants-oui");
+
+  function styleToggle(activeBtn, inactiveBtn){
+    activeBtn.style.background = "var(--royal)"; activeBtn.style.color = "var(--card)";
+    inactiveBtn.style.background = "var(--bg-deep)"; inactiveBtn.style.color = "var(--muted)";
+  }
+  btnCeli.addEventListener("click", ()=>{ profilState.situation="celibataire"; profilState.nombreRevenus=1; styleToggle(btnCeli, btnCouple); revenusBlock.style.display="none"; });
+  btnCouple.addEventListener("click", ()=>{ profilState.situation="couple"; styleToggle(btnCouple, btnCeli); revenusBlock.style.display="block"; });
+  btnRev1.addEventListener("click", ()=>{ profilState.nombreRevenus=1; styleToggle(btnRev1, btnRev2); });
+  btnRev2.addEventListener("click", ()=>{ profilState.nombreRevenus=2; styleToggle(btnRev2, btnRev1); });
+  btnEnfantsNon.addEventListener("click", ()=>{ profilState.aEnfants=false; styleToggle(btnEnfantsNon, btnEnfantsOui); enfantsBlock.style.display="none"; });
+  btnEnfantsOui.addEventListener("click", ()=>{ profilState.aEnfants=true; styleToggle(btnEnfantsOui, btnEnfantsNon); enfantsBlock.style.display="block"; });
+
+  document.getElementById("profil-save").addEventListener("click", ()=>{
+    const prenom = document.getElementById("profil-prenom").value.trim();
+    const nombreEnfantsInput = document.getElementById("profil-nombre-enfants");
+    profile = {
+      prenom: prenom || profile.prenom,
+      naissance: document.getElementById("profil-naissance").value,
+      situation: profilState.situation,
+      nombreRevenus: profilState.situation==="couple" ? profilState.nombreRevenus : 1,
+      aEnfants: profilState.aEnfants,
+      nombreEnfants: profilState.aEnfants ? (Number(nombreEnfantsInput.value) || 1) : 0,
+      consentementAdmin: document.getElementById("profil-consentement").checked,
+    };
+    saveProfile();
+    render();
+  });
+
+  document.getElementById("btn-switch-profile").addEventListener("click", ()=>{
+    logout();
+  });
+
+  document.querySelectorAll(".pwd-toggle[data-toggle-target]").forEach(btn=>{
+    btn.innerHTML = ICONS.eye;
+    btn.addEventListener("click", ()=>{
+      const input = document.getElementById(btn.dataset.toggleTarget);
+      input.type = input.type === "password" ? "text" : "password";
+    });
+  });
+  document.getElementById("btn-change-pwd").addEventListener("click", async ()=>{
+    const oldPwd = document.getElementById("pwd-current").value;
+    const newPwd = document.getElementById("pwd-new").value;
+    const feedback = document.getElementById("pwd-feedback");
+    feedback.style.display = "none";
+    if(!oldPwd || newPwd.length < 8){
+      feedback.textContent = "Indique ton mot de passe actuel et un nouveau mot de passe d'au moins 8 caractères.";
+      feedback.style.color = "var(--coral)"; feedback.style.display = "block";
+      return;
+    }
+    try{
+      await doChangePassword(oldPwd, newPwd);
+      document.getElementById("pwd-current").value = "";
+      document.getElementById("pwd-new").value = "";
+      feedback.textContent = "✅ Mot de passe mis à jour. Prochain renouvellement dans 3 mois.";
+      feedback.style.color = "var(--green)"; feedback.style.display = "block";
+    }catch(e){
+      feedback.textContent = translateAuthError(e.code);
+      feedback.style.color = "var(--coral)"; feedback.style.display = "block";
+    }
+  });
+
+  document.getElementById("btn-export").addEventListener("click", ()=>{
+    const backup = { email: currentUser? currentUser.email : "", profile, items, projects, actuals, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `aurya-sauvegarde-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("btn-import").addEventListener("change", (e)=>{
+    const file = e.target.files[0];
+    const feedback = document.getElementById("import-feedback");
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const data = JSON.parse(ev.target.result);
+        if(!data.profile || !Array.isArray(data.items) || !Array.isArray(data.projects)){
+          throw new Error("Format invalide");
+        }
+        profile = data.profile;
+        items = data.items;
+        projects = data.projects;
+        actuals = data.actuals || {};
+        saveProfile(); saveItems(); saveProjects(); saveActuals();
+        feedback.textContent = "✅ Sauvegarde restaurée avec succès dans ton espace actuel !";
+        feedback.style.color = "var(--green)";
+        render();
+      }catch(err){
+        feedback.textContent = "⚠️ Ce fichier ne semble pas être une sauvegarde Aurya valide.";
+        feedback.style.color = "var(--coral-soft)";
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
+/* ---------------------------------- ADMIN (vue conseil, lecture seule) ---------------------------------- */
+
+/* ---------------------------------- CHAT (avec Hélène) ---------------------------------- */
+let chatMessages = null; // null = pas encore chargé
+let chatLoading = false;
+
+async function loadChat(){
+  chatLoading = true; render();
+  try{
+    const snap = await fbDb.collection("chats").doc(currentUser.uid).collection("messages").orderBy("ts","asc").get();
+    chatMessages = [];
+    snap.forEach(doc=> chatMessages.push(doc.data()));
+  }catch(e){ console.error("Erreur chargement chat", e); chatMessages = []; }
+  chatLoading = false; render();
+}
+
+function renderChat(){
+  if(chatMessages === null){
+    return `
+    <h2 class="display" style="font-size:20px;margin-bottom:8px;">💬 Discuter avec Hélène</h2>
+    <div class="card"><p class="muted-dark" style="text-align:center;">Chargement de la conversation...</p></div>`;
+  }
+  // Le style (bulle "toi" / "Hélène") est déduit d'une comparaison booléenne, jamais du contenu stocké
+  const thread = chatMessages.map(m => {
+    const isMine = m.senderId === currentUser.uid;
+    return `
+    <div class="chat-msg ${isMine? 'from-user':'from-admin'}">
+      <div>${esc(m.text)}</div>
+      <div class="meta">${isMine? 'Toi':'Hélène'} · ${m.ts? new Date(m.ts).toLocaleString('fr-BE'):''}</div>
+    </div>`;
+  }).join("");
+  return `
+    <h2 class="display" style="font-size:20px;margin-bottom:8px;">💬 Discuter avec Hélène</h2>
+    <p class="muted" style="font-size:14px;margin-bottom:16px;">Une question sur ton budget ? Écris ici, Hélène te répond directement.</p>
+    <div class="card">
+      <div class="chat-thread" id="chat-thread">
+        ${thread || `<p class="muted-dark" style="text-align:center;margin:0;">Aucun message pour l'instant. Dis bonjour ! 👋</p>`}
+      </div>
+      <div class="chat-input-row">
+        <input id="chat-input" placeholder="Écris ton message..." maxlength="2000" />
+        <button class="btn btn-primary" id="chat-send">Envoyer</button>
+      </div>
+    </div>
+  `;
+}
+
+function attachChatListeners(){
+  if(chatMessages === null){ if(!chatLoading) loadChat(); return; }
+  const threadEl = document.getElementById("chat-thread");
+  if(threadEl) threadEl.scrollTop = threadEl.scrollHeight;
+
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("chat-send");
+  function send(){
+    const text = input.value.trim();
+    if(!text) return;
+    const msg = { senderId: currentUser.uid, text, ts:new Date().toISOString() };
+    chatMessages = [...chatMessages, msg];
+    fbDb.collection("chats").doc(currentUser.uid).collection("messages").add(msg)
+      .catch(e=>console.error(e));
+    input.value = "";
+    render();
+  }
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", (e)=>{ if(e.key==="Enter") send(); });
+}
+
+/* ---------------------------------- SHELL ---------------------------------- */
+function renderShell(){
+  const tabs = [
+    {id:"accueil", label:"Accueil", icon:ICONS.home},
+    {id:"postes", label:"Postes", icon:ICONS.list},
+    {id:"projets", label:"Projets", icon:ICONS.target},
+    {id:"chat", label:"Discuter", icon:ICONS.chat},
+    {id:"profil", label:"Profil", icon:ICONS.user},
+  ];
+  let content = "";
+  if(activeTab==="accueil") content = renderDashboard();
+  else if(activeTab==="postes") content = renderPostes();
+  else if(activeTab==="projets") content = renderProjets();
+  else if(activeTab==="chat") content = renderChat();
+  else if(activeTab==="profil") content = renderProfil();
+
+  const situation = profile.situation==="couple" ? "Membre · En couple" : "Membre";
+
+  return `
+  <div class="wrap">
+    <div class="app-header">
+      <div class="brand">
+        <img src="${LOGO_WORDMARK}" alt="Aurya" />
+        <div class="status-row">
+          <span class="status-badge">${situation}</span>
+          <span class="version-tag">V01-005</span>
+        </div>
+      </div>
+      <a href="index.html" class="home-icon-btn" title="Accueil du site">${ICONS.home}</a>
+    </div>
+
+    ${content}
+
+    <footer class="legal-footer">
+      <div class="legal-links">
+        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
+        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
+        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
+        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
+      </div>
+      <div class="copyright-block">
+        <p>© ${new Date().getFullYear()} Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
+        <p>Site développé par Hélène Laruelle.</p>
+        <p>Contenu sous la responsabilité de Hélène Laruelle</p>
+      </div>
+    </footer>
+  </div>
+  <div class="bottomnav">
+    <nav>
+      ${tabs.map(t => `
+        <button class="navbtn ${activeTab===t.id?'active':''}" data-tab="${t.id}">
+          ${t.icon}<span>${t.label}</span>
+        </button>`).join("")}
+    </nav>
+  </div>`;
+}
+function attachShellListeners(){
+  document.querySelectorAll(".navbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ activeTab = btn.dataset.tab; render(); });
+  });
+  if(activeTab==="accueil") attachDashboardListeners();
+  if(activeTab==="postes") attachPostesListeners();
+  if(activeTab==="projets") attachProjetsListeners();
+  if(activeTab==="chat") attachChatListeners();
+  if(activeTab==="profil") attachProfilListeners();
+}
+
+/* ---------------------------------- INIT ---------------------------------- */
+document.getElementById("favicon-link").href = LOGO_MARK;
+loadAll();
+</script>
+</body>
+</html>

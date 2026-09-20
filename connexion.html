@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurya — Connexion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="assets/aurya-shared.js"></script>
+</head>
+<body>
+  <div class="auth-box">
+    <div style="text-align:center;margin-bottom:24px;">
+      <a href="index.html"><img id="logo" style="height:56px;" alt="Aurya" /></a>
+    </div>
+
+    <div class="card">
+      <h2 class="display" style="font-size:18px;margin-bottom:16px;">Se connecter</h2>
+      <div class="field"><span>Identifiant</span><input id="login-id" placeholder="Ex : camille.l" autocomplete="username" /></div>
+      <div style="height:12px;"></div>
+      <div class="field">
+        <span>Mot de passe</span>
+        <div class="pwd-field">
+          <input id="login-pwd" type="password" autocomplete="current-password" />
+          <button type="button" class="pwd-toggle" id="toggle-login-pwd" title="Afficher/masquer"></button>
+        </div>
+      </div>
+      <p id="login-error" style="display:none;color:var(--coral);font-size:13px;margin-top:10px;"></p>
+      <div style="height:16px;"></div>
+      <button id="login-submit" class="btn btn-primary" style="width:100%;">Me connecter →</button>
+      <p class="muted-dark" style="font-size:12px;text-align:center;margin-top:12px;">Identifiant et mot de passe te sont attribués par Hélène.</p>
+    </div>
+
+    <div class="divider-row"><hr/>ou<hr/></div>
+
+    <div class="card" id="devenir-membre">
+      <h2 class="display" style="font-size:18px;margin-bottom:6px;">Pas encore membre ? Devenez membre !</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:16px;">Laisse tes coordonnées, Hélène te recontacte pour créer ton accès personnel.</p>
+      <div class="field"><span>Nom <span class="required-star">*</span></span><input id="req-nom" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Prénom <span class="required-star">*</span></span><input id="req-prenom" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>GSM <span class="required-star">*</span></span><input id="req-gsm" type="tel" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>E-mail <span class="required-star">*</span></span><input id="req-email" type="email" /></div>
+      <p class="required-note">* Champs obligatoires</p>
+      <p id="req-error" style="display:none;color:var(--coral);font-size:13px;margin-top:6px;"></p>
+      <p id="req-success" style="display:none;color:var(--green);font-size:13px;margin-top:6px;"></p>
+      <div style="height:14px;"></div>
+      <button id="req-submit" class="btn btn-ghost" style="width:100%;">Envoyer ma demande</button>
+    </div>
+  </div>
+
+  <footer class="legal-footer">
+    <div class="legal-links">
+      <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
+      <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
+      <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
+      <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
+      <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
+      <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
+    </div>
+    <div class="copyright-block">
+      <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
+      <p>Site développé par Hélène Laruelle.</p>
+      <p>Contenu sous la responsabilité de Hélène Laruelle</p>
+    </div>
+  </footer>
+  <div class="hl-badge-wrap" id="hl-badge"></div>
+
+<script>
+document.getElementById("logo").src = LOGO_WORDMARK;
+document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
+document.getElementById("year").textContent = new Date().getFullYear();
+
+const EYE_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_CLOSED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.6 10.6 0 0 1 12 5c7 0 11 7 11 7a13.2 13.2 0 0 1-2.6 3.4M6.6 6.6A13.4 13.4 0 0 0 1 12s4 7 11 7c1.3 0 2.5-.2 3.6-.6"/></svg>';
+const toggleBtn = document.getElementById("toggle-login-pwd");
+toggleBtn.innerHTML = EYE_CLOSED;
+const pwdInput = document.getElementById("login-pwd");
+toggleBtn.addEventListener("click", ()=>{
+  const show = pwdInput.type === "password";
+  pwdInput.type = show ? "text" : "password";
+  toggleBtn.innerHTML = show ? EYE_OPEN : EYE_CLOSED;
+});
+
+if(!initFirebaseApp()){
+  document.getElementById("login-error").textContent = "Configuration Firebase manquante (assets/aurya-shared.js).";
+  document.getElementById("login-error").style.display = "block";
+} else {
+  const auth = firebase.auth();
+  auth.onAuthStateChanged((user)=>{
+    if(user){ window.location.href = "app.html"; }
+  });
+
+  document.getElementById("login-submit").addEventListener("click", async ()=>{
+    const idVal = document.getElementById("login-id").value.trim();
+    const pwdVal = pwdInput.value;
+    const errEl = document.getElementById("login-error");
+    if(!idVal || !pwdVal){ errEl.textContent = "Indique ton identifiant et ton mot de passe."; errEl.style.display="block"; return; }
+    const btn = document.getElementById("login-submit");
+    btn.disabled = true; btn.textContent = "Connexion...";
+    try{
+      await auth.signInWithEmailAndPassword(identifiantToEmail(idVal), pwdVal);
+      window.location.href = "app.html";
+    }catch(e){
+      errEl.textContent = translateAuthError(e.code);
+      errEl.style.display = "block";
+      btn.disabled = false; btn.textContent = "Me connecter →";
+    }
+  });
+
+  const db = firebase.firestore();
+  document.getElementById("req-submit").addEventListener("click", async ()=>{
+    const nom = document.getElementById("req-nom").value.trim();
+    const prenom = document.getElementById("req-prenom").value.trim();
+    const gsm = document.getElementById("req-gsm").value.trim();
+    const email = document.getElementById("req-email").value.trim();
+    const errEl = document.getElementById("req-error");
+    const okEl = document.getElementById("req-success");
+    errEl.style.display = "none"; okEl.style.display = "none";
+    if(!nom || !prenom || !gsm || !email){
+      errEl.textContent = "Merci de remplir tous les champs obligatoires (*).";
+      errEl.style.display = "block";
+      return;
+    }
+    const btn = document.getElementById("req-submit");
+    btn.disabled = true; btn.textContent = "Envoi...";
+    try{
+      await db.collection("demandes").add({
+        nom, prenom, gsm, email,
+        statut: "nouvelle",
+        creeLe: new Date().toISOString(),
+      });
+      okEl.textContent = "✅ Merci ! Ta demande a bien été envoyée, Hélène te recontacte rapidement.";
+      okEl.style.display = "block";
+      document.getElementById("req-nom").value = "";
+      document.getElementById("req-prenom").value = "";
+      document.getElementById("req-gsm").value = "";
+      document.getElementById("req-email").value = "";
+    }catch(e){
+      errEl.textContent = "Une erreur est survenue, réessaie dans un instant.";
+      errEl.style.display = "block";
+    }
+    btn.disabled = false; btn.textContent = "Envoyer ma demande";
+  });
+}
+</script>
+</body>
+</html>

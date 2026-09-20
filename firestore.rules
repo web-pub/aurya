@@ -1,0 +1,69 @@
+// Projet : Aurya — Version V01-005
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Documents des membres : profil, postes, projets, réels encodés
+    match /auryaUsers/{userId} {
+      // Lecture : le membre lui-même, ou l'admin (aperçu global pour le conseil)
+      allow get: if request.auth != null && (request.auth.uid == userId || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow list: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+
+      // Création : le membre lui-même (onboarding), ou l'admin (création de compte depuis l'espace conseil)
+      allow create: if request.auth != null && (request.auth.uid == userId || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+
+      // Modification : le membre lui-même à tout moment,
+      // ou l'admin uniquement si le membre a coché la case d'autorisation
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && resource.data.profile.consentementAdmin == true)
+      );
+
+      allow delete: if false;
+    }
+
+    // Liste des administrateurs (ajoutée manuellement depuis la console Firebase)
+    match /admins/{adminId} {
+      allow get: if request.auth != null && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    // Discussion membre <-> admin (sous-collection : chaque message est un document,
+    // ce qui permet de vérifier que l'expéditeur déclaré est bien la personne connectée —
+    // impossible à valider si les messages étaient stockés dans un simple tableau)
+    match /chats/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow write: if false; // le document racine n'est jamais écrit directement
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+        allow create: if request.auth != null
+          && (request.auth.uid == userId || exists(/databases/$(database)/documents/admins/$(request.auth.uid)))
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['senderId','text','ts'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+        allow update, delete: if false;
+      }
+    }
+
+    // Contenu éditable du site public (page d'accueil) — lecture publique,
+    // écriture réservée à l'admin depuis l'onglet "Contenu du site"
+    match /siteContent/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Demandes "Devenez membre" (formulaire public sur la page de connexion, non authentifié)
+    match /demandes/{demandeId} {
+      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','email','gsm','statut','creeLe'])
+        && request.resource.data.statut == "nouvelle"
+        && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 100
+        && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 100
+        && request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() <= 200
+        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 50;
+      allow read, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+  }
+}
