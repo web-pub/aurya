@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurya — Contact</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="assets/aurya-shared.js"></script>
+</head>
+<body>
+  <div class="wrap" style="max-width:640px;margin:0 auto;padding:24px 16px 60px;">
+    <div class="app-header" style="margin-bottom:24px;border-radius:16px;">
+      <div class="brand"><img id="logo" style="height:26px;" alt="Aurya" /></div>
+      <a href="index.html" class="home-icon-btn" title="Accueil du site" id="home-icon"></a>
+    </div>
+
+    <h1 class="display" style="font-size:24px;margin-bottom:6px;">✉️ Me contacter</h1>
+    <p class="muted" style="font-size:14px;margin-bottom:20px;">Une question, une remarque, une envie de discuter avant de devenir membre ? Écris-moi ici.</p>
+
+    <div class="card" id="contact-form">
+      <div class="field"><span>Nom <span class="required-star">*</span></span><input id="c-nom" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Prénom <span class="required-star">*</span></span><input id="c-prenom" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>E-mail <span class="required-star">*</span></span><input id="c-email" type="email" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Message <span class="required-star">*</span></span>
+        <textarea id="c-message" rows="5" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;"></textarea>
+      </div>
+      <p class="required-note">* Champs obligatoires</p>
+      <p id="c-error" style="display:none;color:var(--coral);font-size:13px;margin-top:6px;"></p>
+      <p id="c-success" style="display:none;color:var(--green);font-size:13px;margin-top:6px;"></p>
+      <div style="height:14px;"></div>
+      <button id="c-submit" class="btn btn-primary" style="width:100%;">Envoyer le message</button>
+    </div>
+
+    <footer class="legal-footer">
+      <div class="legal-links">
+        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
+        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
+        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
+        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
+      </div>
+      <div class="copyright-block">
+        <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
+        <p>Site développé par Hélène Laruelle.</p>
+        <p>Contenu sous la responsabilité de Hélène Laruelle</p>
+      </div>
+    </footer>
+  </div>
+  <div class="hl-badge-wrap" id="hl-badge"></div>
+
+<script>
+document.getElementById("logo").src = LOGO_WORDMARK;
+document.getElementById("home-icon").innerHTML = ICONS.home;
+document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
+document.getElementById("year").textContent = new Date().getFullYear();
+
+if(initFirebaseApp()){
+  const db = firebase.firestore();
+  document.getElementById("c-submit").addEventListener("click", async ()=>{
+    const nom = document.getElementById("c-nom").value.trim();
+    const prenom = document.getElementById("c-prenom").value.trim();
+    const email = document.getElementById("c-email").value.trim();
+    const message = document.getElementById("c-message").value.trim();
+    const errEl = document.getElementById("c-error");
+    const okEl = document.getElementById("c-success");
+    errEl.style.display = "none"; okEl.style.display = "none";
+    if(!nom || !prenom || !email || !message){
+      errEl.textContent = "Merci de remplir tous les champs obligatoires (*).";
+      errEl.style.display = "block";
+      return;
+    }
+    const btn = document.getElementById("c-submit");
+    btn.disabled = true; btn.textContent = "Envoi...";
+    try{
+      await db.collection("contacts").add({
+        nom, prenom, email, message,
+        statut: "nouveau",
+        creeLe: new Date().toISOString(),
+      });
+      okEl.textContent = "✅ Message envoyé, merci ! Hélène te répond dès que possible.";
+      okEl.style.display = "block";
+      document.getElementById("contact-form").querySelectorAll("input, textarea").forEach(el=> el.value = "");
+    }catch(e){
+      errEl.textContent = "Une erreur est survenue, réessaie dans un instant.";
+      errEl.style.display = "block";
+    }
+    btn.disabled = false; btn.textContent = "Envoyer le message";
+  });
+}
+</script>
+</body>
+</html>

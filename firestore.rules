@@ -1,4 +1,4 @@
-// Projet : Aurya — Version V01-005
+// Projet : Aurya — Version V01-006
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -57,12 +57,37 @@ service cloud.firestore {
 
     // Demandes "Devenez membre" (formulaire public sur la page de connexion, non authentifié)
     match /demandes/{demandeId} {
-      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','email','gsm','statut','creeLe'])
+      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','naissance','motivation','email','gsm','statut','creeLe'])
+        && request.resource.data.statut == "nouvelle"
+        && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 100
+        && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 100
+        && request.resource.data.naissance is string && request.resource.data.naissance.size() <= 20
+        && request.resource.data.motivation is string && request.resource.data.motivation.size() <= 1000
+        && request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() <= 200
+        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 50;
+      allow read, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Demandes de réservation / rendez-vous conseil (formulaire public, non authentifié)
+    match /reservations/{reservationId} {
+      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','email','gsm','dateSouhaitee','message','statut','creeLe'])
         && request.resource.data.statut == "nouvelle"
         && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 100
         && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 100
         && request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() <= 200
-        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 50;
+        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 50
+        && request.resource.data.dateSouhaitee is string && request.resource.data.dateSouhaitee.size() <= 50
+        && request.resource.data.message is string && request.resource.data.message.size() <= 1000;
+      allow read, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    // Messages du formulaire de contact public (page contact.html, non authentifié)
+    match /contacts/{contactId} {
+      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','email','message','statut','creeLe'])
+        && request.resource.data.statut == "nouveau"
+        && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 100
+        && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 100
+        && request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() <= 200
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 3000;
       allow read, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
   }

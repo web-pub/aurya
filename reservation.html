@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurya — Réserver un rendez-vous</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="assets/aurya-shared.js"></script>
+</head>
+<body>
+  <div class="wrap" style="max-width:640px;margin:0 auto;padding:24px 16px 60px;">
+    <div class="app-header" style="margin-bottom:24px;border-radius:16px;">
+      <div class="brand"><img id="logo" style="height:26px;" alt="Aurya" /></div>
+      <a href="index.html" class="home-icon-btn" title="Accueil du site" id="home-icon"></a>
+    </div>
+
+    <h1 class="display" style="font-size:24px;margin-bottom:6px;">📅 Réserver un rendez-vous conseil</h1>
+    <p class="muted" style="font-size:14px;margin-bottom:20px;">Laisse tes coordonnées et une date qui t'arrange, Hélène te recontacte pour confirmer.</p>
+
+    <div class="card dashed" style="margin-bottom:20px;background:rgba(233,106,86,0.08);">
+      <p style="font-size:13px;line-height:1.6;margin:0;color:var(--cream);">
+        <strong>⚠️ Avertissement important :</strong> les conseils donnés lors de ce rendez-vous sont fournis à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat) et n'engagent en rien Hélène Laruelle. Chacun reste seul responsable des décisions financières qu'il prend suite à ces échanges ; la responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de conséquence négative liée à leur application.
+      </p>
+    </div>
+
+    <div class="card" id="reservation-form">
+      <div class="field"><span>Nom <span class="required-star">*</span></span><input id="r-nom" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Prénom <span class="required-star">*</span></span><input id="r-prenom" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>GSM <span class="required-star">*</span></span><input id="r-gsm" type="tel" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>E-mail <span class="required-star">*</span></span><input id="r-email" type="email" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Date/période souhaitée <span class="required-star">*</span></span><input id="r-date" placeholder="Ex : la semaine du 12, en soirée..." /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Message (optionnel)</span>
+        <textarea id="r-message" rows="3" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;" placeholder="Précise ta demande si tu veux..."></textarea>
+      </div>
+      <p class="required-note">* Champs obligatoires</p>
+      <p id="r-error" style="display:none;color:var(--coral);font-size:13px;margin-top:6px;"></p>
+      <p id="r-success" style="display:none;color:var(--green);font-size:13px;margin-top:6px;"></p>
+      <div style="height:14px;"></div>
+      <button id="r-submit" class="btn btn-primary" style="width:100%;">Envoyer ma demande de rendez-vous</button>
+    </div>
+
+    <footer class="legal-footer">
+      <div class="legal-links">
+        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
+        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
+        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
+        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
+      </div>
+      <div class="copyright-block">
+        <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
+        <p>Site développé par Hélène Laruelle.</p>
+        <p>Contenu sous la responsabilité de Hélène Laruelle</p>
+      </div>
+    </footer>
+  </div>
+  <div class="hl-badge-wrap" id="hl-badge"></div>
+
+<script>
+document.getElementById("logo").src = LOGO_WORDMARK;
+document.getElementById("home-icon").innerHTML = ICONS.home;
+document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
+document.getElementById("year").textContent = new Date().getFullYear();
+
+if(initFirebaseApp()){
+  const db = firebase.firestore();
+  document.getElementById("r-submit").addEventListener("click", async ()=>{
+    const nom = document.getElementById("r-nom").value.trim();
+    const prenom = document.getElementById("r-prenom").value.trim();
+    const gsm = document.getElementById("r-gsm").value.trim();
+    const email = document.getElementById("r-email").value.trim();
+    const dateSouhaitee = document.getElementById("r-date").value.trim();
+    const message = document.getElementById("r-message").value.trim();
+    const errEl = document.getElementById("r-error");
+    const okEl = document.getElementById("r-success");
+    errEl.style.display = "none"; okEl.style.display = "none";
+    if(!nom || !prenom || !gsm || !email || !dateSouhaitee){
+      errEl.textContent = "Merci de remplir tous les champs obligatoires (*).";
+      errEl.style.display = "block";
+      return;
+    }
+    const btn = document.getElementById("r-submit");
+    btn.disabled = true; btn.textContent = "Envoi...";
+    try{
+      await db.collection("reservations").add({
+        nom, prenom, gsm, email, dateSouhaitee, message,
+        statut: "nouvelle",
+        creeLe: new Date().toISOString(),
+      });
+      okEl.textContent = "✅ Merci ! Ta demande a bien été envoyée, Hélène te recontacte pour confirmer.";
+      okEl.style.display = "block";
+      document.getElementById("reservation-form").querySelectorAll("input, textarea").forEach(el=> el.value = "");
+    }catch(e){
+      errEl.textContent = "Une erreur est survenue, réessaie dans un instant.";
+      errEl.style.display = "block";
+    }
+    btn.disabled = false; btn.textContent = "Envoyer ma demande de rendez-vous";
+  });
+}
+</script>
+</body>
+</html>

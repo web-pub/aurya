@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurya — Notre histoire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="assets/aurya-shared.js"></script>
+</head>
+<body>
+  <div class="wrap" style="max-width:760px;margin:0 auto;padding:24px 16px 60px;">
+    <div class="app-header" style="margin-bottom:24px;border-radius:16px;">
+      <div class="brand"><img id="logo" style="height:26px;" alt="Aurya" /></div>
+      <a href="index.html" class="home-icon-btn" title="Accueil du site" id="home-icon"></a>
+    </div>
+
+    <h1 class="display" style="font-size:24px;margin-bottom:16px;">✨ L'histoire d'Aurya</h1>
+
+    <div class="card" id="histoire-content">
+      <p class="muted-dark" style="text-align:center;">Chargement...</p>
+    </div>
+
+    <footer class="legal-footer">
+      <div class="legal-links">
+        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
+        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
+        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
+        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
+        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
+      </div>
+      <div class="copyright-block">
+        <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
+        <p>Site développé par Hélène Laruelle.</p>
+        <p>Contenu sous la responsabilité de Hélène Laruelle</p>
+      </div>
+    </footer>
+  </div>
+  <div class="hl-badge-wrap" id="hl-badge"></div>
+
+<script>
+document.getElementById("logo").src = LOGO_WORDMARK;
+document.getElementById("home-icon").innerHTML = ICONS.home;
+document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
+document.getElementById("year").textContent = new Date().getFullYear();
+
+const DEFAULT_HISTOIRE = `Aurya trouve sa racine dans le mot latin "aurum", qui signifie l'or. Depuis l'Antiquité, l'or est le symbole de la valeur durable, de la stabilité, de la richesse construite dans le temps, de la confiance et de la transmission.
+
+Plutôt que d'utiliser une référence directe à l'argent ou à la finance, Aurya transforme cette racine en un nom plus moderne, plus humain et plus accessible : AUR, pour aurum, l'or ; YA, une sonorité douce et positive qui rend le nom plus chaleureux qu'un terme purement financier.
+
+Aurya évoque l'art de transformer ses ressources en valeur durable.
+
+Chez Aurya, nous pensons qu'un budget n'est pas une contrainte, mais un outil de liberté. Chaque euro gagné, économisé ou investi possède sa propre valeur. Aurya aide chacun à révéler cette valeur, à mieux comprendre ses finances et à construire sereinement ses projets. Parce qu'une bonne gestion de budget ne consiste pas seulement à compter son argent : elle consiste à créer de la liberté pour demain.
+
+Comme souvent, il y a aussi un niveau de lecture caché : AUR pour l'or, la valeur ; YA pour "il y a". On peut y lire, presque inconsciemment : "il y a de la valeur", ou "votre valeur est déjà là". C'est particulièrement juste pour un outil de budget : Aurya n'a pas la prétention de rendre riche du jour au lendemain, mais d'aider chacun à voir la valeur qu'il possède déjà, et à mieux l'utiliser.
+
+« Aurya, révélez la valeur de chaque euro. »`;
+
+function renderHistoire(texte){
+  document.getElementById("histoire-content").innerHTML =
+    texte.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.8;color:var(--muted);margin-bottom:16px;">${p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`).join("");
+}
+
+renderHistoire(DEFAULT_HISTOIRE);
+if(initFirebaseApp()){
+  firebase.firestore().collection("siteContent").doc("histoire").get()
+    .then(snap => { if(snap.exists && snap.data().texte) renderHistoire(snap.data().texte); })
+    .catch(()=>{});
+}
+</script>
+</body>
+</html>

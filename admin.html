@@ -29,6 +29,9 @@ let editingProfile = false;
 let demandesList = null;
 let creatingFrom = null;      // demande en cours de traitement -> {id, nom, prenom, email, gsm}
 
+let reservationsList = null;
+let messagesList = null;
+
 let chatMessages = null;      // conversation du membre sélectionné
 
 function goToLogin(){ window.location.href = "connexion.html"; }
@@ -83,6 +86,8 @@ function renderShell(){
   const tabs = [
     {id:"membres", label:"Membres"},
     {id:"demandes", label:"Demandes"},
+    {id:"reservations", label:"Réservations"},
+    {id:"messages", label:"Messages"},
     {id:"motsdepasse", label:"Mots de passe"},
     {id:"ajouter", label:"Ajouter un membre"},
     {id:"contenu", label:"Contenu du site"},
@@ -90,6 +95,8 @@ function renderShell(){
   let content = "";
   if(adminTab==="membres") content = renderMembres();
   else if(adminTab==="demandes") content = renderDemandes();
+  else if(adminTab==="reservations") content = renderReservations();
+  else if(adminTab==="messages") content = renderMessages();
   else if(adminTab==="motsdepasse") content = renderMotsDePasse();
   else if(adminTab==="ajouter") content = renderAjouterMembre();
   else if(adminTab==="contenu") content = renderContenuSite();
@@ -101,7 +108,7 @@ function renderShell(){
         <img src="${LOGO_WORDMARK}" alt="Aurya" />
         <div class="status-row">
           <span class="status-badge">🛡️ Admin</span>
-          <span class="version-tag">V01-005</span>
+          <span class="version-tag">V01-006</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -144,6 +151,8 @@ function attachShellListeners(){
   });
   if(adminTab==="membres") attachMembresListeners();
   if(adminTab==="demandes") attachDemandesListeners();
+  if(adminTab==="reservations") attachReservationsListeners();
+  if(adminTab==="messages") attachMessagesListeners();
   if(adminTab==="motsdepasse") attachMotsDePasseListeners();
   if(adminTab==="ajouter") attachAjouterMembreListeners();
   if(adminTab==="contenu") attachContenuSiteListeners();
@@ -486,6 +495,112 @@ function attachDemandesListeners(){
   });
 }
 
+/* ---------------------------------- RÉSERVATIONS ---------------------------------- */
+async function loadReservations(){
+  reservationsList = "loading"; render();
+  try{
+    const snap = await fbDb.collection("reservations").orderBy("creeLe","desc").get();
+    const list = [];
+    snap.forEach(doc=> list.push({ id: doc.id, ...doc.data() }));
+    reservationsList = list;
+  }catch(e){ console.error(e); reservationsList = []; }
+  render();
+}
+
+function renderReservations(){
+  if(reservationsList === null || reservationsList === "loading"){
+    return `<div class="card"><p class="muted-dark" style="text-align:center;">Chargement des réservations...</p></div>`;
+  }
+  const nouvelles = reservationsList.filter(r=>r.statut!=="traitee");
+  const traitees = reservationsList.filter(r=>r.statut==="traitee");
+  return `
+    <h3 class="display" style="font-size:16px;margin-bottom:10px;">Demandes de rendez-vous (${nouvelles.length})</h3>
+    ${nouvelles.length===0? `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Aucune demande pour l'instant.</p></div>` :
+      nouvelles.map(r=>`
+      <div class="card" style="margin-bottom:10px;">
+        <div class="between">
+          <div>
+            <strong>${esc(r.prenom)} ${esc(r.nom)}</strong>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(r.email)} · ${esc(r.gsm)}</p>
+            <p class="muted" style="font-size:13px;margin:6px 0 0;">📅 Souhaité : ${esc(r.dateSouhaitee)}</p>
+            ${r.message? `<p class="muted-dark" style="font-size:13px;margin:4px 0 0;">${esc(r.message)}</p>` : ""}
+          </div>
+          <button class="btn btn-ghost" data-mark-reservation="${r.id}">Marquer traité</button>
+        </div>
+      </div>`).join("")}
+    ${traitees.length>0? `
+    <h3 class="display" style="font-size:16px;margin:20px 0 10px;">Traitées (${traitees.length})</h3>
+    ${traitees.map(r=>`
+      <div class="card" style="margin-bottom:8px;opacity:.7;">
+        <strong>${esc(r.prenom)} ${esc(r.nom)}</strong>
+        <span class="muted-dark" style="font-size:12px;margin-left:8px;">${esc(r.dateSouhaitee)}</span>
+      </div>`).join("")}` : ""}
+  `;
+}
+function attachReservationsListeners(){
+  if(reservationsList === null){ loadReservations(); return; }
+  document.querySelectorAll("[data-mark-reservation]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.markReservation;
+      await fbDb.collection("reservations").doc(id).update({ statut:"traitee" }).catch(()=>{});
+      reservationsList = reservationsList.map(r=> r.id===id? {...r, statut:"traitee"} : r);
+      render();
+    });
+  });
+}
+
+/* ---------------------------------- MESSAGES (page Contact) ---------------------------------- */
+async function loadMessages(){
+  messagesList = "loading"; render();
+  try{
+    const snap = await fbDb.collection("contacts").orderBy("creeLe","desc").get();
+    const list = [];
+    snap.forEach(doc=> list.push({ id: doc.id, ...doc.data() }));
+    messagesList = list;
+  }catch(e){ console.error(e); messagesList = []; }
+  render();
+}
+
+function renderMessages(){
+  if(messagesList === null || messagesList === "loading"){
+    return `<div class="card"><p class="muted-dark" style="text-align:center;">Chargement des messages...</p></div>`;
+  }
+  const nouveaux = messagesList.filter(m=>m.statut!=="traite");
+  const traites = messagesList.filter(m=>m.statut==="traite");
+  return `
+    <h3 class="display" style="font-size:16px;margin-bottom:10px;">Nouveaux messages (${nouveaux.length})</h3>
+    ${nouveaux.length===0? `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Aucun message pour l'instant.</p></div>` :
+      nouveaux.map(m=>`
+      <div class="card" style="margin-bottom:10px;">
+        <div class="between">
+          <div>
+            <strong>${esc(m.prenom)} ${esc(m.nom)}</strong>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(m.email)}</p>
+            <p class="muted" style="font-size:13px;margin:6px 0 0;">${esc(m.message)}</p>
+          </div>
+          <button class="btn btn-ghost" data-mark-message="${m.id}">Marquer traité</button>
+        </div>
+      </div>`).join("")}
+    ${traites.length>0? `
+    <h3 class="display" style="font-size:16px;margin:20px 0 10px;">Traités (${traites.length})</h3>
+    ${traites.map(m=>`
+      <div class="card" style="margin-bottom:8px;opacity:.7;">
+        <strong>${esc(m.prenom)} ${esc(m.nom)}</strong>
+      </div>`).join("")}` : ""}
+  `;
+}
+function attachMessagesListeners(){
+  if(messagesList === null){ loadMessages(); return; }
+  document.querySelectorAll("[data-mark-message]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.markMessage;
+      await fbDb.collection("contacts").doc(id).update({ statut:"traite" }).catch(()=>{});
+      messagesList = messagesList.map(m=> m.id===id? {...m, statut:"traite"} : m);
+      render();
+    });
+  });
+}
+
 /* ---------------------------------- MOTS DE PASSE ---------------------------------- */
 function renderMotsDePasse(){
   if(membersList === null || membersList === "loading"){
@@ -611,13 +726,54 @@ const DEFAULT_SITE_CONTENT = {
   f3_emoji: "💬", f3_titre: "Accompagnement", f3_texte: "Si tu le souhaites, discute directement avec Hélène pour obtenir des conseils personnalisés sur ton budget.",
 };
 let siteContent = null;
+const DEFAULT_HISTOIRE_ADMIN = `Aurya trouve sa racine dans le mot latin "aurum", qui signifie l'or. Depuis l'Antiquité, l'or est le symbole de la valeur durable, de la stabilité, de la richesse construite dans le temps, de la confiance et de la transmission.
+
+Plutôt que d'utiliser une référence directe à l'argent ou à la finance, Aurya transforme cette racine en un nom plus moderne, plus humain et plus accessible : AUR, pour aurum, l'or ; YA, une sonorité douce et positive qui rend le nom plus chaleureux qu'un terme purement financier.
+
+Aurya évoque l'art de transformer ses ressources en valeur durable.
+
+Chez Aurya, nous pensons qu'un budget n'est pas une contrainte, mais un outil de liberté. Chaque euro gagné, économisé ou investi possède sa propre valeur. Aurya aide chacun à révéler cette valeur, à mieux comprendre ses finances et à construire sereinement ses projets. Parce qu'une bonne gestion de budget ne consiste pas seulement à compter son argent : elle consiste à créer de la liberté pour demain.
+
+Comme souvent, il y a aussi un niveau de lecture caché : AUR pour l'or, la valeur ; YA pour "il y a". On peut y lire, presque inconsciemment : "il y a de la valeur", ou "votre valeur est déjà là". C'est particulièrement juste pour un outil de budget : Aurya n'a pas la prétention de rendre riche du jour au lendemain, mais d'aider chacun à voir la valeur qu'il possède déjà, et à mieux l'utiliser.
+
+« Aurya, révélez la valeur de chaque euro. »`;
+const DEFAULT_APROPOS_ADMIN = `Je m'appelle Hélène Laruelle. J'accompagne au quotidien des indépendants et des entreprises dans leur gestion administrative, comptable et RH — et j'ai voulu mettre cette même rigueur au service d'un outil plus personnel : aider chacun à voir clair dans son budget.
+
+Aurya est né de cette conviction : la gestion financière ne devrait pas être une source de stress, mais un espace de clarté et de sérénité. Cette page t'appartient aussi un peu — dis-moi ce que tu aimerais y lire !`;
+const DEFAULT_CONSEILS_ADMIN = "Aurya te propose ici, au fil du temps, quelques repères généraux pour mieux gérer ton budget : mettre de côté dès que possible, prévoir tes charges annuelles à l'avance, distinguer besoins et envies, et te fixer des objectifs atteignables. Hélène complètera cette page avec des conseils plus détaillés.";
+const DEFAULT_ROI_ADMIN = `En utilisant Aurya, tu acceptes le présent règlement d'ordre intérieur.
+
+1. Aurya est un outil personnel de suivi budgétaire. Les données que tu encodes (revenus, dépenses, projets d'épargne) restent ta propriété et te sont strictement personnelles.
+
+2. Si tu autorises Hélène à consulter tes données pour te conseiller, elle s'engage à en faire un usage confidentiel, uniquement dans le but de t'accompagner.
+
+3. Les conseils donnés par Hélène, que ce soit via le chat, un rendez-vous ou la page Conseils, sont donnés à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat). Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements.
+
+4. Chaque personne reste seule responsable des décisions financières qu'elle prend, y compris sur base des échanges avec Hélène. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation d'Aurya ou de ses conseils.
+
+5. Ton mot de passe doit être renouvelé tous les 3 mois pour la sécurité de tes données.
+
+6. Hélène se réserve le droit de suspendre un accès en cas d'usage abusif du service.`;
+let extraTexts = null; // { histoire, apropos, conseils, roi }
 
 async function loadSiteContent(){
   siteContent = "loading"; render();
   try{
-    const snap = await fbDb.collection("siteContent").doc("public").get();
-    siteContent = { ...DEFAULT_SITE_CONTENT, ...(snap.exists ? snap.data() : {}) };
-  }catch(e){ console.error(e); siteContent = { ...DEFAULT_SITE_CONTENT }; }
+    const [publicSnap, histSnap, aproposSnap, conseilsSnap, roiSnap] = await Promise.all([
+      fbDb.collection("siteContent").doc("public").get(),
+      fbDb.collection("siteContent").doc("histoire").get(),
+      fbDb.collection("siteContent").doc("apropos").get(),
+      fbDb.collection("siteContent").doc("conseils").get(),
+      fbDb.collection("siteContent").doc("roi").get(),
+    ]);
+    siteContent = { ...DEFAULT_SITE_CONTENT, ...(publicSnap.exists ? publicSnap.data() : {}) };
+    extraTexts = {
+      histoire: (histSnap.exists && histSnap.data().texte) ? histSnap.data().texte : DEFAULT_HISTOIRE_ADMIN,
+      apropos: (aproposSnap.exists && aproposSnap.data().texte) ? aproposSnap.data().texte : DEFAULT_APROPOS_ADMIN,
+      conseils: (conseilsSnap.exists && conseilsSnap.data().texte) ? conseilsSnap.data().texte : DEFAULT_CONSEILS_ADMIN,
+      roi: (roiSnap.exists && roiSnap.data().texte) ? roiSnap.data().texte : DEFAULT_ROI_ADMIN,
+    };
+  }catch(e){ console.error(e); siteContent = { ...DEFAULT_SITE_CONTENT }; extraTexts = { histoire: DEFAULT_HISTOIRE_ADMIN, apropos: DEFAULT_APROPOS_ADMIN, conseils: DEFAULT_CONSEILS_ADMIN, roi: DEFAULT_ROI_ADMIN }; }
   render();
 }
 
@@ -627,7 +783,7 @@ function renderContenuSite(){
   }
   const c = siteContent;
   return `
-    <p class="muted" style="font-size:14px;margin-bottom:16px;">Ce texte est celui affiché sur la page de présentation publique (index.html). Toute modification est visible immédiatement, sans toucher au code.</p>
+    <p class="muted" style="font-size:14px;margin-bottom:16px;">Ce texte est celui affiché sur les pages publiques du site (Accueil, Notre histoire, À propos, Conseils, ROI). Toute modification est visible immédiatement, sans toucher au code.</p>
 
     <div class="card" style="margin-bottom:16px;">
       <h3 class="display" style="font-size:16px;margin-bottom:10px;">Message principal</h3>
@@ -645,6 +801,28 @@ function renderContenuSite(){
       <div style="height:10px;"></div>
       <div class="field"><span>Texte</span><textarea id="c-f${n}-texte" rows="3" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(c['f'+n+'_texte'])}</textarea></div>
     </div>`).join("")}
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">✨ Page "Notre histoire"</h3>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:10px;">Sépare les paragraphes par une ligne vide.</p>
+      <textarea id="c-histoire" rows="8" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(extraTexts.histoire)}</textarea>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🙋 Page "À propos"</h3>
+      <textarea id="c-apropos" rows="6" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(extraTexts.apropos)}</textarea>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">💡 Page "Conseils"</h3>
+      <textarea id="c-conseils" rows="6" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(extraTexts.conseils)}</textarea>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">📋 Règlement d'ordre intérieur (ROI)</h3>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:10px;">Ce texte doit être lu et accepté par chaque membre avant son premier accès à l'application.</p>
+      <textarea id="c-roi" rows="10" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(extraTexts.roi)}</textarea>
+    </div>
 
     <p id="content-feedback" style="display:none;font-size:13px;margin-bottom:10px;"></p>
     <button class="btn btn-primary" id="btn-save-content">Enregistrer et publier</button>
@@ -671,9 +849,20 @@ function attachContenuSiteListeners(){
       f3_texte: document.getElementById("c-f3-texte").value.trim() || DEFAULT_SITE_CONTENT.f3_texte,
     };
     try{
-      await fbDb.collection("siteContent").doc("public").set(updated, { merge:true });
+      const histoire = document.getElementById("c-histoire").value.trim() || DEFAULT_HISTOIRE_ADMIN;
+      const apropos = document.getElementById("c-apropos").value.trim() || DEFAULT_APROPOS_ADMIN;
+      const conseils = document.getElementById("c-conseils").value.trim() || DEFAULT_CONSEILS_ADMIN;
+      const roi = document.getElementById("c-roi").value.trim() || DEFAULT_ROI_ADMIN;
+      await Promise.all([
+        fbDb.collection("siteContent").doc("public").set(updated, { merge:true }),
+        fbDb.collection("siteContent").doc("histoire").set({ texte: histoire }, { merge:true }),
+        fbDb.collection("siteContent").doc("apropos").set({ texte: apropos }, { merge:true }),
+        fbDb.collection("siteContent").doc("conseils").set({ texte: conseils }, { merge:true }),
+        fbDb.collection("siteContent").doc("roi").set({ texte: roi }, { merge:true }),
+      ]);
       siteContent = updated;
-      feedback.textContent = "✅ Contenu publié sur la page d'accueil.";
+      extraTexts = { histoire, apropos, conseils, roi };
+      feedback.textContent = "✅ Contenu publié sur le site.";
       feedback.style.color = "var(--green)"; feedback.style.display = "block";
     }catch(e){
       feedback.textContent = "⚠️ Impossible d'enregistrer, réessaie.";

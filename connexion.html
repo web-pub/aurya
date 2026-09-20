@@ -44,9 +44,15 @@
       <div style="height:10px;"></div>
       <div class="field"><span>Prénom <span class="required-star">*</span></span><input id="req-prenom" /></div>
       <div style="height:10px;"></div>
+      <div class="field"><span>Date de naissance <span class="required-star">*</span></span><input id="req-naissance" type="date" /></div>
+      <div style="height:10px;"></div>
       <div class="field"><span>GSM <span class="required-star">*</span></span><input id="req-gsm" type="tel" /></div>
       <div style="height:10px;"></div>
       <div class="field"><span>E-mail <span class="required-star">*</span></span><input id="req-email" type="email" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Pourquoi souhaites-tu un accès à Aurya ? <span class="required-star">*</span></span>
+        <textarea id="req-motivation" rows="3" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;" placeholder="Ex : je veux apprendre à mieux gérer mon budget, mettre de côté pour un projet..."></textarea>
+      </div>
       <p class="required-note">* Champs obligatoires</p>
       <p id="req-error" style="display:none;color:var(--coral);font-size:13px;margin-top:6px;"></p>
       <p id="req-success" style="display:none;color:var(--green);font-size:13px;margin-top:6px;"></p>
@@ -118,12 +124,14 @@ if(!initFirebaseApp()){
   document.getElementById("req-submit").addEventListener("click", async ()=>{
     const nom = document.getElementById("req-nom").value.trim();
     const prenom = document.getElementById("req-prenom").value.trim();
+    const naissance = document.getElementById("req-naissance").value;
     const gsm = document.getElementById("req-gsm").value.trim();
     const email = document.getElementById("req-email").value.trim();
+    const motivation = document.getElementById("req-motivation").value.trim();
     const errEl = document.getElementById("req-error");
     const okEl = document.getElementById("req-success");
     errEl.style.display = "none"; okEl.style.display = "none";
-    if(!nom || !prenom || !gsm || !email){
+    if(!nom || !prenom || !naissance || !gsm || !email || !motivation){
       errEl.textContent = "Merci de remplir tous les champs obligatoires (*).";
       errEl.style.display = "block";
       return;
@@ -132,7 +140,7 @@ if(!initFirebaseApp()){
     btn.disabled = true; btn.textContent = "Envoi...";
     try{
       await db.collection("demandes").add({
-        nom, prenom, gsm, email,
+        nom, prenom, naissance, gsm, email, motivation,
         statut: "nouvelle",
         creeLe: new Date().toISOString(),
       });
@@ -140,8 +148,10 @@ if(!initFirebaseApp()){
       okEl.style.display = "block";
       document.getElementById("req-nom").value = "";
       document.getElementById("req-prenom").value = "";
+      document.getElementById("req-naissance").value = "";
       document.getElementById("req-gsm").value = "";
       document.getElementById("req-email").value = "";
+      document.getElementById("req-motivation").value = "";
     }catch(e){
       errEl.textContent = "Une erreur est survenue, réessaie dans un instant.";
       errEl.style.display = "block";

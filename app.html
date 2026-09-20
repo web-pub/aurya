@@ -58,6 +58,16 @@ function saveActuals(){ if(currentUser) userDocRef().set({ actuals }, { merge:tr
 /* ---------------------------------- INIT / SESSION ---------------------------------- */
 function goToLogin(){ window.location.href = "connexion.html"; }
 
+/* Détermine la prochaine étape obligatoire après chargement du profil :
+   1) validation du ROI (toujours en premier, avant toute autre chose)
+   2) renouvellement du mot de passe si expiré
+   3) application normale */
+function nextStageAfterProfile(p){
+  if(!p.roiAccepteLe) return "roi";
+  if(motDePasseExpire(p)) return "pwdexpired";
+  return "app";
+}
+
 async function loadAll(){
   if(!initFirebaseApp()){
     document.getElementById("app").innerHTML = `<div class="center-screen"><p class="muted">Configuration Firebase manquante (assets/aurya-shared.js).</p></div>`;
@@ -71,7 +81,7 @@ async function loadAll(){
     const data = await loadUserDoc();
     if(data && data.profile){
       profile = data.profile; items = data.items||[]; projects = data.projects||[]; actuals = data.actuals||{};
-      appStage = motDePasseExpire(profile) ? "pwdexpired" : "app";
+      appStage = nextStageAfterProfile(profile);
     } else {
       appStage = "onboarding";
     }
@@ -93,6 +103,67 @@ async function doChangePassword(oldPwd, newPwd){
   saveProfile();
   // Retire aussi le champ côté Firestore (saveProfile ne fait que fusionner, il n'efface pas les champs absents)
   if(currentUser) userDocRef().update({ "profile._pwdPlain": firebase.firestore.FieldValue.delete() }).catch(()=>{});
+}
+
+/* ---------------------------------- ROI (Règlement d'Ordre Intérieur) — validation obligatoire ---------------------------------- */
+const DEFAULT_ROI = `En utilisant Aurya, tu acceptes le présent règlement d'ordre intérieur.
+
+1. Aurya est un outil personnel de suivi budgétaire. Les données que tu encodes (revenus, dépenses, projets d'épargne) restent ta propriété et te sont strictement personnelles.
+
+2. Si tu autorises Hélène à consulter tes données pour te conseiller, elle s'engage à en faire un usage confidentiel, uniquement dans le but de t'accompagner.
+
+3. Les conseils donnés par Hélène, que ce soit via le chat, un rendez-vous ou la page Conseils, sont donnés à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat). Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements.
+
+4. Chaque personne reste seule responsable des décisions financières qu'elle prend, y compris sur base des échanges avec Hélène. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation d'Aurya ou de ses conseils.
+
+5. Ton mot de passe doit être renouvelé tous les 3 mois pour la sécurité de tes données.
+
+6. Hélène se réserve le droit de suspendre un accès en cas d'usage abusif du service.`;
+
+let roiText = null;
+async function loadRoiText(){
+  try{
+    const snap = await fbDb.collection("siteContent").doc("roi").get();
+    roiText = (snap.exists && snap.data().texte) ? snap.data().texte : DEFAULT_ROI;
+  }catch(e){ roiText = DEFAULT_ROI; }
+  render();
+}
+
+function renderRoi(){
+  if(roiText === null){ loadRoiText(); return `<div class="center-screen"><p class="muted">Chargement...</p></div>`; }
+  const paragraphs = roiText.split("\n\n").map(p=>`<p style="font-size:13px;line-height:1.7;color:var(--muted);margin-bottom:12px;">${esc(p)}</p>`).join("");
+  return `
+  <div class="center-screen" style="background:radial-gradient(circle at 30% 20%, var(--card-light), var(--bg-deep) 70%);">
+    <div class="onboard-box">
+      <div style="text-align:center;margin-bottom:20px;">
+        <img src="${LOGO_WORDMARK}" alt="Aurya" style="height:56px;margin-bottom:14px;" />
+      </div>
+      <div class="card">
+        <h2 class="display" style="font-size:18px;margin-bottom:10px;">📋 Règlement d'ordre intérieur</h2>
+        <div style="max-height:280px;overflow-y:auto;padding-right:6px;margin-bottom:14px;border-bottom:1px solid var(--card-lighter);">
+          ${paragraphs}
+        </div>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="roi-accepte" style="margin-top:3px;width:16px;height:16px;" />
+          <span style="font-size:13px;color:var(--muted);">J'ai lu et j'accepte le règlement d'ordre intérieur d'Aurya.</span>
+        </label>
+        <div style="height:14px;"></div>
+        <button class="btn btn-primary" id="btn-roi-continuer" style="width:100%;" disabled>Continuer →</button>
+      </div>
+    </div>
+  </div>`;
+}
+function attachRoiListeners(){
+  const checkbox = document.getElementById("roi-accepte");
+  const btn = document.getElementById("btn-roi-continuer");
+  if(!checkbox) return;
+  checkbox.addEventListener("change", ()=>{ btn.disabled = !checkbox.checked; });
+  btn.addEventListener("click", ()=>{
+    profile = { ...profile, roiAccepteLe: new Date().toISOString() };
+    saveProfile();
+    appStage = motDePasseExpire(profile) ? "pwdexpired" : "app";
+    render();
+  });
 }
 
 function renderPwdExpired(){
@@ -160,6 +231,11 @@ function render(){
   if(appStage === "onboarding"){
     app.innerHTML = renderOnboarding();
     attachOnboardingListeners();
+    return;
+  }
+  if(appStage === "roi"){
+    app.innerHTML = renderRoi();
+    attachRoiListeners();
     return;
   }
   if(appStage === "pwdexpired"){
@@ -263,7 +339,7 @@ function attachOnboardingListeners(){
     };
     items = []; projects = []; actuals = {};
     saveProfile();
-    appStage = "app";
+    appStage = nextStageAfterProfile(profile);
     render();
   });
 }
@@ -1124,7 +1200,7 @@ function renderShell(){
         <img src="${LOGO_WORDMARK}" alt="Aurya" />
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-005</span>
+          <span class="version-tag">V01-006</span>
         </div>
       </div>
       <a href="index.html" class="home-icon-btn" title="Accueil du site">${ICONS.home}</a>
