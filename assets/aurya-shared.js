@@ -60,6 +60,33 @@ const LOGO_HL_BADGE = `
    habituelle : identifiant = prenom.1erelettredunom, mot de passe =
    3 premières lettres du prénom + 3 premières lettres du nom + JJMM
    de la date de naissance. Modifiables ensuite par l'admin avant validation. */
+/* Bandeau fixe commun à toutes les pages publiques (logo complet à gauche,
+   titres de pages cliquables à droite), même principe que le site du club canin.
+   Utilisation : document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("histoire"); */
+const SITE_NAV_PAGES = [
+  {id:"index", href:"index.html", label:"Accueil"},
+  {id:"histoire", href:"histoire.html", label:"Notre histoire"},
+  {id:"apropos", href:"apropos.html", label:"À propos"},
+  {id:"conseils", href:"conseils.html", label:"Conseils"},
+  {id:"reservation", href:"reservation.html", label:"Réserver un RDV"},
+  {id:"contact", href:"contact.html", label:"Contact"},
+];
+function renderSiteTopbar(activeId){
+  const links = SITE_NAV_PAGES.map(p =>
+    `<a href="${p.href}"${p.id===activeId? ' class="active"':''}>${p.label}</a>`
+  ).join("");
+  return `
+  <div class="site-topbar">
+    <a href="index.html" class="topbar-logo"><img src="${LOGO_WORDMARK}" alt="Aurya" /></a>
+    <nav>${links}</nav>
+    <div class="topbar-auth">
+      <a href="connexion.html" class="btn btn-primary">🔑 Se connecter</a>
+      <a href="connexion.html#devenir-membre" class="btn btn-ghost">✨ Devenir membre</a>
+    </div>
+  </div>
+  <div class="topbar-spacer"></div>`;
+}
+
 function genererIdentifiant(prenom, nom){
   const p = slugifyId(prenom).replace(/\./g,"");
   const n = slugifyId(nom).replace(/\./g,"");

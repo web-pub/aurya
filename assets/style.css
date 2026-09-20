@@ -9,6 +9,15 @@
   body{margin:0;background:var(--bg);color:var(--cream);font-family:'Inter',sans-serif;}
   .display{font-family:'Fredoka',sans-serif;}
   .wrap{max-width:760px;margin:0 auto;padding:24px 16px 110px;}
+  .card-narrow{max-width:380px;}
+  @media (min-width:900px){
+    .wrap{max-width:980px;}
+    .card-narrow{max-width:480px;}
+    .field input, .field select, .field textarea{font-size:15px;}
+  }
+  @media (min-width:1200px){
+    .wrap{max-width:1120px;}
+  }
   .topbar{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
   .topbar .logo{font-size:26px;}
   .topbar .name{font-family:'Fredoka';color:var(--gold-soft);font-weight:600;font-size:22px;}
@@ -76,6 +85,24 @@ a{color:var(--royal);text-decoration:none;}
 .app-header .brand{display:flex;flex-direction:column;gap:2px;}
 .app-header .brand img{height:26px;}
 .app-header .status-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted-dark);}
+
+.site-topbar{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 24px;background:var(--bg-deep);border-bottom:1px solid var(--card-lighter);flex-wrap:wrap;}
+.site-topbar .topbar-logo{display:flex;align-items:center;line-height:0;}
+.site-topbar .topbar-logo img{height:32px;display:block;}
+.site-topbar nav{display:flex;align-items:center;gap:2px;flex-wrap:wrap;}
+.site-topbar nav a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;padding:8px 12px;border-radius:10px;transition:background .15s,color .15s;white-space:nowrap;}
+.site-topbar nav a:hover{background:var(--card-light);color:var(--cream);}
+.site-topbar nav a.active{color:var(--gold);background:var(--card-light);}
+.site-topbar .topbar-auth{display:flex;gap:8px;flex-wrap:wrap;}
+.site-topbar .topbar-auth .btn{padding:8px 14px;font-size:13px;}
+.topbar-spacer{height:74px;}
+@media (max-width:820px){
+  .site-topbar{padding:10px 14px;justify-content:center;}
+  .site-topbar .topbar-logo{order:1;flex:1 0 100%;justify-content:center;display:flex;margin-bottom:4px;}
+  .site-topbar nav{order:2;justify-content:center;flex:1 1 auto;}
+  .site-topbar .topbar-auth{order:3;justify-content:center;flex:1 0 100%;margin-top:4px;}
+  .topbar-spacer{height:118px;}
+}
 .status-badge{background:rgba(31,58,147,0.1);color:var(--royal);padding:2px 8px;border-radius:999px;font-weight:700;letter-spacing:.02em;}
 .version-tag{color:var(--muted-dark);}
 .home-icon-btn{border:1px solid var(--card-lighter);border-radius:12px;padding:8px;background:var(--bg-deep);color:var(--muted-dark);cursor:pointer;display:flex;}
