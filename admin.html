@@ -108,7 +108,7 @@ function renderShell(){
         <img src="${LOGO_WORDMARK}" alt="Aurya" />
         <div class="status-row">
           <span class="status-badge">🛡️ Admin</span>
-          <span class="version-tag">V01-006</span>
+          <span class="version-tag">V01-009</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -173,6 +173,13 @@ async function loadMembers(){
   render();
 }
 
+function formatDerniereConnexion(iso){
+  if(!iso) return "Jamais connecté(e)";
+  const d = new Date(iso);
+  if(isNaN(d)) return "Jamais connecté(e)";
+  return "Dernière connexion : " + d.toLocaleString('fr-BE', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
 function renderMembres(){
   if(selectedMember) return renderMemberDetail(selectedMember);
   if(membersList === null || membersList === "loading"){
@@ -189,6 +196,7 @@ function renderMembres(){
       <div>
         <strong>${esc(m.profile.prenom||"(sans prénom)")}</strong>
         <span class="muted-dark" style="font-size:12px;margin-left:8px;">${esc(m.profile.email||"")}</span>
+        <p class="muted-dark" style="font-size:11px;margin:2px 0 0;">${formatDerniereConnexion(m.profile.derniereConnexion)}</p>
       </div>
       <div style="display:flex;align-items:center;gap:14px;">
         <span style="font-size:13px;font-weight:700;color:${t.prevSolde>=0?'var(--green)':'var(--coral)'};">${t.prevSolde>=0?'+':''}${fmt(t.prevSolde)}/mois</span>
@@ -613,7 +621,7 @@ function renderMotsDePasse(){
   return `
     <div class="card">
       <table>
-        <thead><tr><th>Membre</th><th>Identifiant</th><th>Mot de passe</th></tr></thead>
+        <thead><tr><th>Membre</th><th>Identifiant</th><th>Mot de passe</th><th>Dernière connexion</th></tr></thead>
         <tbody>
           ${withPwd.map(m=>`
           <tr>
@@ -623,6 +631,7 @@ function renderMotsDePasse(){
               <span class="pwd-masked" data-pwd="${esc(m.profile._pwdPlain)}">••••••••</span>
               <button class="icon-btn" data-toggle-pwd>${ICONS.eye}</button>
             </td>
+            <td style="font-size:12px;color:var(--muted-dark);">${formatDerniereConnexion(m.profile.derniereConnexion)}</td>
           </tr>`).join("")}
         </tbody>
       </table>
@@ -736,7 +745,13 @@ Chez Aurya, nous pensons qu'un budget n'est pas une contrainte, mais un outil de
 
 Comme souvent, il y a aussi un niveau de lecture caché : AUR pour l'or, la valeur ; YA pour "il y a". On peut y lire, presque inconsciemment : "il y a de la valeur", ou "votre valeur est déjà là". C'est particulièrement juste pour un outil de budget : Aurya n'a pas la prétention de rendre riche du jour au lendemain, mais d'aider chacun à voir la valeur qu'il possède déjà, et à mieux l'utiliser.
 
-« Aurya, révélez la valeur de chaque euro. »`;
+« Aurya, révélez la valeur de chaque euro. »
+
+Mais il y a une autre raison, plus personnelle, à la naissance d'Aurya. On apprend à lire, à écrire, à compter. On apprend l'histoire, les sciences, le sport — parfois même la religion. Mais personne ne nous apprend vraiment à gérer notre argent. Pourtant, contrairement à beaucoup de ces matières, tout le monde, un jour, devra établir un budget, payer ses factures, épargner pour ses projets et prendre des décisions financières importantes. Ouvrier, enseignant, indépendant, infirmier, employé ou entrepreneur : personne n'y échappe.
+
+Chez Aurya, nous pensons que l'éducation financière n'est pas un privilège réservé aux experts-comptables ou aux financiers. C'est une compétence essentielle de la vie quotidienne, au même titre que lire ou écrire.
+
+Notre mission est simple : rendre la gestion du budget accessible à tous, pour que chacun puisse comprendre ses finances, reprendre le contrôle de son avenir, et avancer sereinement vers ses projets de vie. Parce que tout le monde mérite de savoir gérer son argent — pas seulement les comptables, pas seulement les financiers. Tout le monde.`;
 const DEFAULT_APROPOS_ADMIN = `Je m'appelle Hélène Laruelle. J'accompagne au quotidien des indépendants et des entreprises dans leur gestion administrative, comptable et RH — et j'ai voulu mettre cette même rigueur au service d'un outil plus personnel : aider chacun à voir clair dans son budget.
 
 Aurya est né de cette conviction : la gestion financière ne devrait pas être une source de stress, mais un espace de clarté et de sérénité. Cette page t'appartient aussi un peu — dis-moi ce que tu aimerais y lire !`;

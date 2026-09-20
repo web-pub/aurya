@@ -82,6 +82,8 @@ async function loadAll(){
     if(data && data.profile){
       profile = data.profile; items = data.items||[]; projects = data.projects||[]; actuals = data.actuals||{};
       appStage = nextStageAfterProfile(profile);
+      // Trace discrète de la dernière connexion, visible par l'admin dans la liste des membres
+      userDocRef().update({ "profile.derniereConnexion": new Date().toISOString() }).catch(()=>{});
     } else {
       appStage = "onboarding";
     }
@@ -913,7 +915,7 @@ function renderProfil(){
   const nombreEnfants = Number(profile.nombreEnfants) || 0;
   return `
     <h2 class="display" style="font-size:20px;margin-bottom:16px;">Ton profil</h2>
-    <div class="card" style="max-width:380px;">
+    <div class="card card-narrow">
       <div class="field"><span>Prénom</span><input id="profil-prenom" value="${esc(profile.prenom)}" /></div>
       <div style="height:12px;"></div>
       <div class="field"><span>Date de naissance</span><input id="profil-naissance" type="date" value="${esc(profile.naissance||'')}" /></div>
@@ -944,9 +946,9 @@ function renderProfil(){
         <div class="field"><span>Combien d'enfants ?</span><input id="profil-nombre-enfants" type="number" min="1" value="${nombreEnfants||1}" /></div>
       </div>
 
-      <div style="height:20px;border-top:1px solid var(--card-lighter);margin-top:16px;padding-top:16px;">
+      <div style="border-top:1px solid var(--card-lighter);margin-top:16px;padding-top:16px;">
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-          <input type="checkbox" id="profil-consentement" ${profile.consentementAdmin? 'checked':''} style="margin-top:3px;width:16px;height:16px;" />
+          <input type="checkbox" id="profil-consentement" ${profile.consentementAdmin? 'checked':''} style="margin-top:3px;width:16px;height:16px;flex-shrink:0;" />
           <span style="font-size:13px;color:var(--muted);">Autoriser Hélène à consulter et, si besoin, modifier mes informations pour me conseiller sur mon budget.</span>
         </label>
       </div>
@@ -955,14 +957,14 @@ function renderProfil(){
       <button class="btn btn-primary" id="profil-save">Enregistrer</button>
     </div>
 
-    <div class="card" style="max-width:380px;">
+    <div class="card card-narrow">
       <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔑 Ton compte</h3>
       <p class="muted" style="font-size:13px;margin-bottom:4px;">Identifiant : <strong style="color:var(--royal);">${esc(currentUser? currentUser.email.split('@')[0] : "")}</strong></p>
       <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">☁️ Tes données sont privées, protégées par ton mot de passe, et te suivent automatiquement sur tous tes appareils.</p>
       <button class="btn btn-ghost" id="btn-switch-profile">🔁 Se déconnecter</button>
     </div>
 
-    <div class="card" style="max-width:380px;">
+    <div class="card card-narrow">
       <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔒 Changer mon mot de passe</h3>
       <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">Si Hélène t'a communiqué un mot de passe généré automatiquement, change-le ici pour un mot de passe que toi seul(e) connais.</p>
       <div class="field"><span>Mot de passe actuel</span>
@@ -977,7 +979,7 @@ function renderProfil(){
       <button class="btn btn-ghost" id="btn-change-pwd">Mettre à jour le mot de passe</button>
     </div>
 
-    <div class="card" style="max-width:380px;">
+    <div class="card card-narrow">
       <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔒 Tes données sont en sécurité</h3>
       <p class="muted" style="font-size:13px;margin-bottom:14px;">Tout ce que tu encodes est sauvegardé automatiquement sur ton compte, et reste disponible même si l'application est mise à jour. Tu peux aussi garder une copie de secours sur ton appareil :</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1183,6 +1185,7 @@ function renderShell(){
     {id:"projets", label:"Projets", icon:ICONS.target},
     {id:"chat", label:"Discuter", icon:ICONS.chat},
     {id:"profil", label:"Profil", icon:ICONS.user},
+    {id:"reglement", label:"Règlement", icon:ICONS.shield},
   ];
   let content = "";
   if(activeTab==="accueil") content = renderDashboard();
@@ -1190,20 +1193,25 @@ function renderShell(){
   else if(activeTab==="projets") content = renderProjets();
   else if(activeTab==="chat") content = renderChat();
   else if(activeTab==="profil") content = renderProfil();
+  else if(activeTab==="reglement") content = renderReglementTab();
 
   const situation = profile.situation==="couple" ? "Membre · En couple" : "Membre";
 
   return `
-  <div class="wrap">
+  <div class="wrap" style="padding-bottom:60px;">
     <div class="app-header">
       <div class="brand">
         <img src="${LOGO_WORDMARK}" alt="Aurya" />
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-006</span>
+          <span class="version-tag">V01-009</span>
         </div>
       </div>
       <a href="index.html" class="home-icon-btn" title="Accueil du site">${ICONS.home}</a>
+    </div>
+
+    <div class="admin-tabs" style="margin-top:16px;">
+      ${tabs.map(t=>`<button class="admin-tab-btn ${activeTab===t.id?'active':''}" data-tab="${t.id}">${t.icon}<span style="margin-left:6px;">${t.label}</span></button>`).join("")}
     </div>
 
     ${content}
@@ -1223,18 +1231,10 @@ function renderShell(){
         <p>Contenu sous la responsabilité de Hélène Laruelle</p>
       </div>
     </footer>
-  </div>
-  <div class="bottomnav">
-    <nav>
-      ${tabs.map(t => `
-        <button class="navbtn ${activeTab===t.id?'active':''}" data-tab="${t.id}">
-          ${t.icon}<span>${t.label}</span>
-        </button>`).join("")}
-    </nav>
   </div>`;
 }
 function attachShellListeners(){
-  document.querySelectorAll(".navbtn").forEach(btn=>{
+  document.querySelectorAll("[data-tab]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ activeTab = btn.dataset.tab; render(); });
   });
   if(activeTab==="accueil") attachDashboardListeners();
@@ -1242,6 +1242,19 @@ function attachShellListeners(){
   if(activeTab==="projets") attachProjetsListeners();
   if(activeTab==="chat") attachChatListeners();
   if(activeTab==="profil") attachProfilListeners();
+}
+
+function renderReglementTab(){
+  if(roiText === null){ loadRoiText(); return `<div class="card"><p class="muted-dark" style="text-align:center;">Chargement...</p></div>`; }
+  const paragraphs = roiText.split("\n\n").map(p=>`<p style="font-size:13px;line-height:1.7;color:var(--muted);margin-bottom:12px;">${esc(p)}</p>`).join("");
+  const accepteLe = profile.roiAccepteLe ? new Date(profile.roiAccepteLe).toLocaleString('fr-BE', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : null;
+  return `
+    <h2 class="display" style="font-size:20px;margin-bottom:16px;">📋 Règlement d'ordre intérieur</h2>
+    <div class="card">
+      ${paragraphs}
+      ${accepteLe? `<p class="muted-dark" style="font-size:12px;margin-top:16px;border-top:1px solid var(--card-lighter);padding-top:12px;">✅ Accepté le ${accepteLe}.</p>` : ""}
+    </div>
+  `;
 }
 
 /* ---------------------------------- INIT ---------------------------------- */

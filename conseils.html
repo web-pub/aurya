@@ -12,11 +12,8 @@
 <script src="assets/aurya-shared.js"></script>
 </head>
 <body>
+  <div id="site-topbar-mount"></div>
   <div class="wrap" style="max-width:760px;margin:0 auto;padding:24px 16px 60px;">
-    <div class="app-header" style="margin-bottom:24px;border-radius:16px;">
-      <div class="brand"><img id="logo" style="height:26px;" alt="Aurya" /></div>
-      <a href="index.html" class="home-icon-btn" title="Accueil du site" id="home-icon"></a>
-    </div>
 
     <h1 class="display" style="font-size:24px;margin-bottom:16px;">💡 Conseils</h1>
 
@@ -55,8 +52,7 @@
   <div class="hl-badge-wrap" id="hl-badge"></div>
 
 <script>
-document.getElementById("logo").src = LOGO_WORDMARK;
-document.getElementById("home-icon").innerHTML = ICONS.home;
+document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("conseils");
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
 

@@ -12,11 +12,8 @@
 <script src="assets/aurya-shared.js"></script>
 </head>
 <body>
+  <div id="site-topbar-mount"></div>
   <div class="wrap" style="max-width:760px;margin:0 auto;padding:24px 16px 60px;">
-    <div class="app-header" style="margin-bottom:24px;border-radius:16px;">
-      <div class="brand"><img id="logo" style="height:26px;" alt="Aurya" /></div>
-      <a href="index.html" class="home-icon-btn" title="Accueil du site" id="home-icon"></a>
-    </div>
 
     <h1 class="display" style="font-size:24px;margin-bottom:16px;">✨ L'histoire d'Aurya</h1>
 
@@ -43,8 +40,7 @@
   <div class="hl-badge-wrap" id="hl-badge"></div>
 
 <script>
-document.getElementById("logo").src = LOGO_WORDMARK;
-document.getElementById("home-icon").innerHTML = ICONS.home;
+document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("histoire");
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
 
@@ -58,7 +54,13 @@ Chez Aurya, nous pensons qu'un budget n'est pas une contrainte, mais un outil de
 
 Comme souvent, il y a aussi un niveau de lecture caché : AUR pour l'or, la valeur ; YA pour "il y a". On peut y lire, presque inconsciemment : "il y a de la valeur", ou "votre valeur est déjà là". C'est particulièrement juste pour un outil de budget : Aurya n'a pas la prétention de rendre riche du jour au lendemain, mais d'aider chacun à voir la valeur qu'il possède déjà, et à mieux l'utiliser.
 
-« Aurya, révélez la valeur de chaque euro. »`;
+« Aurya, révélez la valeur de chaque euro. »
+
+Mais il y a une autre raison, plus personnelle, à la naissance d'Aurya. On apprend à lire, à écrire, à compter. On apprend l'histoire, les sciences, le sport — parfois même la religion. Mais personne ne nous apprend vraiment à gérer notre argent. Pourtant, contrairement à beaucoup de ces matières, tout le monde, un jour, devra établir un budget, payer ses factures, épargner pour ses projets et prendre des décisions financières importantes. Ouvrier, enseignant, indépendant, infirmier, employé ou entrepreneur : personne n'y échappe.
+
+Chez Aurya, nous pensons que l'éducation financière n'est pas un privilège réservé aux experts-comptables ou aux financiers. C'est une compétence essentielle de la vie quotidienne, au même titre que lire ou écrire.
+
+Notre mission est simple : rendre la gestion du budget accessible à tous, pour que chacun puisse comprendre ses finances, reprendre le contrôle de son avenir, et avancer sereinement vers ses projets de vie. Parce que tout le monde mérite de savoir gérer son argent — pas seulement les comptables, pas seulement les financiers. Tout le monde.`;
 
 function renderHistoire(texte){
   document.getElementById("histoire-content").innerHTML =
