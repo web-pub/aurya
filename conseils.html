@@ -15,11 +15,11 @@
   <div id="site-topbar-mount"></div>
   <div class="wrap" style="max-width:760px;margin:0 auto;padding:24px 16px 60px;">
 
-    <h1 class="display" style="font-size:24px;margin-bottom:16px;">💡 Conseils</h1>
+    <h1 class="display" style="font-size:24px;margin-bottom:16px;">Conseils</h1>
 
     <div class="card dashed" style="margin-bottom:20px;background:rgba(233,106,86,0.08);">
       <p style="font-size:13px;line-height:1.6;margin:0;color:var(--cream);">
-        <strong>⚠️ Avertissement important :</strong> les informations et conseils présentés ici et dans les échanges via Aurya sont donnés à titre purement informatif et indicatif. Ils ne constituent ni un conseil financier, comptable ou juridique réglementé, ni une garantie de résultat. Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements. Chaque personne reste seule responsable des décisions financières qu'elle prend. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation de ces informations.
+        <strong>Avertissement important :</strong> les informations et conseils présentés ici et dans les échanges via Aurya sont donnés à titre purement informatif et indicatif. Ils ne constituent ni un conseil financier, comptable ou juridique réglementé, ni une garantie de résultat. Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements. Chaque personne reste seule responsable des décisions financières qu'elle prend. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation de ces informations.
       </p>
     </div>
 
@@ -28,18 +28,11 @@
     <div style="height:20px;"></div>
     <div class="card" style="text-align:center;">
       <p class="muted" style="font-size:14px;margin-bottom:12px;">Envie d'un accompagnement personnalisé ?</p>
-      <a href="reservation.html" class="btn btn-primary">📅 Réserver un rendez-vous conseil</a>
+      <a href="reservation.html" class="btn btn-primary">Réserver un rendez-vous conseil</a>
     </div>
 
     <footer class="legal-footer">
-      <div class="legal-links">
-        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-      </div>
+      <div class="legal-links" id="legal-links-mount"></div>
       <div class="copyright-block">
         <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
         <p>Site développé par Hélène Laruelle.</p>
@@ -53,6 +46,7 @@
 document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("conseils");
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
+document.getElementById("legal-links-mount").innerHTML = renderLegalLinks();
 
 if(initFirebaseApp()){
   firebase.firestore().collection("conseils").where("statut","==","publie").get()

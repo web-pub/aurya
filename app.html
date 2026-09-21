@@ -145,7 +145,7 @@ function renderRoi(){
         <img src="${LOGO_WORDMARK}" alt="Aurya" style="height:56px;margin-bottom:14px;" />
       </div>
       <div class="card">
-        <h2 class="display" style="font-size:18px;margin-bottom:10px;">📋 Règlement d'ordre intérieur</h2>
+        <h2 class="display" style="font-size:18px;margin-bottom:10px;">Règlement d'ordre intérieur</h2>
         <div style="max-height:280px;overflow-y:auto;padding-right:6px;margin-bottom:14px;border-bottom:1px solid var(--card-lighter);">
           ${paragraphs}
         </div>
@@ -180,7 +180,7 @@ function renderPwdExpired(){
         <img src="${LOGO_WORDMARK}" alt="Aurya" style="height:56px;margin-bottom:14px;" />
       </div>
       <div class="card">
-        <h2 class="display" style="font-size:18px;margin-bottom:8px;">🔒 Mot de passe à renouveler</h2>
+        <h2 class="display" style="font-size:18px;margin-bottom:8px;">Mot de passe à renouveler</h2>
         <p class="muted" style="font-size:14px;margin-bottom:16px;">Pour la sécurité de tes données financières, ton mot de passe doit être changé tous les 3 mois. Choisis-en un nouveau pour continuer.</p>
         <div class="field"><span>Mot de passe actuel</span>
           <div class="pwd-field"><input id="pwd-current" type="password" autocomplete="current-password" /><button type="button" class="pwd-toggle" data-toggle-target="pwd-current"></button></div>
@@ -263,7 +263,7 @@ function renderOnboarding(){
         <p class="muted" style="font-size:14px;line-height:1.5;">Aurya transforme le budget en un espace doux et clair, où chaque décision devient plus simple. Une lumière dans le quotidien.</p>
       </div>
       <div class="card">
-        <h2 class="display" style="font-size:18px;margin-bottom:16px;">Avant de commencer, dis-nous qui tu es 👋</h2>
+        <h2 class="display" style="font-size:18px;margin-bottom:16px;">Avant de commencer, dis-nous qui tu es</h2>
 
         <div class="field"><span>Ton prénom</span><input id="ob-prenom" placeholder="Ex : Camille" /></div>
         <div style="height:12px;"></div>
@@ -272,8 +272,8 @@ function renderOnboarding(){
 
         <div class="field"><span>Ta situation</span></div>
         <div class="type-toggle" style="margin-top:6px;">
-          <button type="button" id="ob-celibataire" style="background:var(--royal);color:var(--card);">🙋 Célibataire</button>
-          <button type="button" id="ob-couple" style="background:var(--bg-deep);color:var(--muted);">💞 En couple</button>
+          <button type="button" id="ob-celibataire" style="background:var(--royal);color:var(--card);">Célibataire</button>
+          <button type="button" id="ob-couple" style="background:var(--bg-deep);color:var(--muted);">En couple</button>
         </div>
 
         <div id="ob-revenus-block" style="display:none;margin-top:14px;">
@@ -292,29 +292,44 @@ function renderOnboarding(){
           </div>
         </div>
         <div id="ob-nombre-enfants-block" style="display:none;margin-top:12px;">
-          <div class="field"><span>Combien d'enfants ?</span><input id="ob-nombre-enfants" type="number" min="1" value="1" /></div>
+          <div id="ob-enfants-list"></div>
+          <button type="button" class="btn btn-ghost" id="ob-add-enfant" style="margin-top:4px;">${ICONS.plus} Ajouter un enfant</button>
         </div>
 
         <div style="height:16px;"></div>
         <button id="ob-submit" class="btn btn-primary" disabled style="width:100%;">C'est parti →</button>
-        <p class="muted-dark" style="font-size:12px;text-align:center;margin-top:12px;">On garde tout ça bien au chaud, juste pour te connaître un peu mieux 💛</p>
+        <p class="muted-dark" style="font-size:12px;text-align:center;margin-top:12px;">On garde tout ça bien au chaud, juste pour te connaître un peu mieux</p>
       </div>
     </div>
   </div>`;
 }
-let obState = { situation:"celibataire", nombreRevenus:1, aEnfants:false, nombreEnfants:1 };
+let obState = { situation:"celibataire", nombreRevenus:1, aEnfants:false, enfants:[] };
 function attachOnboardingListeners(){
-  obState = { situation:"celibataire", nombreRevenus:1, aEnfants:false, nombreEnfants:1 };
+  obState = { situation:"celibataire", nombreRevenus:1, aEnfants:false, enfants:[] };
   const prenomInput = document.getElementById("ob-prenom");
   const submitBtn = document.getElementById("ob-submit");
   const revenusBlock = document.getElementById("ob-revenus-block");
   const enfantsBlock = document.getElementById("ob-nombre-enfants-block");
+  const enfantsListEl = document.getElementById("ob-enfants-list");
   const btnCeli = document.getElementById("ob-celibataire");
   const btnCouple = document.getElementById("ob-couple");
   const btnRev1 = document.getElementById("ob-rev-1");
   const btnRev2 = document.getElementById("ob-rev-2");
   const btnEnfantsNon = document.getElementById("ob-enfants-non");
   const btnEnfantsOui = document.getElementById("ob-enfants-oui");
+  const btnAddEnfant = document.getElementById("ob-add-enfant");
+
+  function syncEnfantsFromInputs(){ obState.enfants = readEnfantsRows(obState.enfants.length, "ob"); }
+  function renderEnfantsList(){
+    enfantsListEl.innerHTML = renderEnfantsRows(obState.enfants, "ob");
+    enfantsListEl.querySelectorAll("[data-remove-enfant]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        syncEnfantsFromInputs();
+        obState.enfants.splice(Number(btn.dataset.removeEnfant), 1);
+        renderEnfantsList();
+      });
+    });
+  }
 
   function styleToggle(activeBtn, inactiveBtn){
     activeBtn.style.background = "var(--royal)"; activeBtn.style.color = "var(--card)";
@@ -330,9 +345,18 @@ function attachOnboardingListeners(){
   btnRev1.addEventListener("click", ()=>{ obState.nombreRevenus=1; styleToggle(btnRev1, btnRev2); });
   btnRev2.addEventListener("click", ()=>{ obState.nombreRevenus=2; styleToggle(btnRev2, btnRev1); });
   btnEnfantsNon.addEventListener("click", ()=>{ obState.aEnfants=false; styleToggle(btnEnfantsNon, btnEnfantsOui); enfantsBlock.style.display="none"; });
-  btnEnfantsOui.addEventListener("click", ()=>{ obState.aEnfants=true; styleToggle(btnEnfantsOui, btnEnfantsNon); enfantsBlock.style.display="block"; });
+  btnEnfantsOui.addEventListener("click", ()=>{
+    obState.aEnfants=true; styleToggle(btnEnfantsOui, btnEnfantsNon); enfantsBlock.style.display="block";
+    if(obState.enfants.length===0){ obState.enfants.push({naissance:"", niveauEtude:NIVEAUX_ETUDE[0]}); renderEnfantsList(); }
+  });
+  btnAddEnfant.addEventListener("click", ()=>{
+    syncEnfantsFromInputs();
+    obState.enfants.push({naissance:"", niveauEtude:NIVEAUX_ETUDE[0]});
+    renderEnfantsList();
+  });
 
   submitBtn.addEventListener("click", async () => {
+    if(obState.aEnfants) syncEnfantsFromInputs();
     submitBtn.disabled = true; submitBtn.textContent = "Un instant...";
     profile = {
       prenom: prenomInput.value.trim(),
@@ -340,7 +364,7 @@ function attachOnboardingListeners(){
       situation: obState.situation,
       nombreRevenus: obState.situation==="couple" ? obState.nombreRevenus : 1,
       aEnfants: obState.aEnfants,
-      nombreEnfants: obState.aEnfants ? (Number(document.getElementById("ob-nombre-enfants").value) || 1) : 0,
+      enfants: obState.aEnfants ? obState.enfants : [],
       email: currentUser? currentUser.email : "",
     };
     items = []; projects = []; actuals = {};
@@ -368,9 +392,10 @@ function renderDashboard(){
   const annualItems = items.filter(i=>i.frequence==="annuel");
 
   const situationLabel = profile.situation==="couple"
-    ? `💞 En couple · ${Number(profile.nombreRevenus)||1} revenu${(Number(profile.nombreRevenus)||1)>1?'s':''}`
-    : `🙋 Célibataire`;
-  const enfantsLabel = profile.aEnfants ? ` · 👶 ${Number(profile.nombreEnfants)||0} enfant${(Number(profile.nombreEnfants)||0)>1?'s':''}` : "";
+    ? `En couple · ${Number(profile.nombreRevenus)||1} revenu${(Number(profile.nombreRevenus)||1)>1?'s':''}`
+    : `Célibataire`;
+  const nbEnfants = Array.isArray(profile.enfants) ? profile.enfants.length : 0;
+  const enfantsLabel = profile.aEnfants ? ` · ${nbEnfants} enfant${nbEnfants>1?'s':''}` : "";
   const situationBadge = `<div class="row" style="margin-top:10px;flex-wrap:wrap;"><span class="pill" style="background:rgba(184,154,106,0.15);color:var(--gold-dim);">${situationLabel}${enfantsLabel}</span></div>`;
 
   const joursAvantMdp = joursAvantExpirationMdp(profile);
@@ -378,9 +403,9 @@ function renderDashboard(){
   if(joursAvantMdp <= 14){
     pwdReminderBlock = `
     <div class="card dashed">
-      <div class="row"><span style="font-size:22px;">🔒</span>
+      <div class="row">
         <div>
-          <p style="font-weight:600;margin:0;">Ton mot de passe expire dans ${joursAvantMdp} jour${joursAvantMdp>1?'s':''} 🔐</p>
+          <p style="font-weight:600;margin:0;">Ton mot de passe expire dans ${joursAvantMdp} jour${joursAvantMdp>1?'s':''}</p>
           <p class="muted" style="font-size:13px;margin:4px 0 0;">Rends-toi dans l'onglet Profil pour le renouveler avant l'échéance.</p>
         </div>
       </div>
@@ -392,10 +417,9 @@ function renderDashboard(){
     birthdayBlock = `
     <div class="card banner-purple">
       <div class="row">
-        <div style="font-size:28px;">🎉</div>
         <div>
-          <p class="display" style="font-weight:600;font-size:18px;margin:0;">Joyeux anniversaire ${esc(profile.prenom)} ! 🎉 ${bday.nextAge} ans aujourd'hui</p>
-          <p style="color:#EAE0F7;font-size:14px;margin:4px 0 0;">On espère que cette année sera pleine de belles lumières ✨</p>
+          <p class="display" style="font-weight:600;font-size:18px;margin:0;">Joyeux anniversaire ${esc(profile.prenom)} ! ${bday.nextAge} ans aujourd'hui</p>
+          <p style="color:#EAE0F7;font-size:14px;margin:4px 0 0;">Et n'oublie pas : aujourd'hui, c'est permis de se faire plaisir aussi. Tu le mérites !</p>
         </div>
       </div>
     </div>`;
@@ -404,13 +428,12 @@ function renderDashboard(){
     <div class="card dashed">
       <div class="between">
         <div class="row">
-          <div style="font-size:24px;">🎂</div>
           <div>
-            <p style="font-weight:600;margin:0;">Ton anniversaire approche dans ${bday.daysUntil} jour${bday.daysUntil>1?'s':''} 🎂</p>
+            <p style="font-weight:600;margin:0;">Ton anniversaire approche dans ${bday.daysUntil} jour${bday.daysUntil>1?'s':''}</p>
             <p class="muted" style="font-size:13px;margin:4px 0 0;">Envie de te prévoir un petit cadeau ? Crée un projet et mets un peu de côté chaque mois.</p>
           </div>
         </div>
-        <button class="btn btn-primary" id="btn-create-gift-project">🎁 Créer un projet</button>
+        <button class="btn btn-primary" id="btn-create-gift-project">Créer un projet</button>
       </div>
     </div>`;
   }
@@ -419,8 +442,8 @@ function renderDashboard(){
   if(annualItems.length>0){
     annualBlock = `
     <div class="card">
-      <div class="row" style="margin-bottom:10px;"><span style="color:var(--gold);">🛡️</span><h3 class="display" style="font-size:16px;">Tes charges annuelles, mensualisées pour toi</h3></div>
-      <p class="muted" style="font-size:14px;margin-bottom:10px;">Pour que la facture ne te fasse jamais peur, on te propose de mettre un peu de côté chaque mois 👇</p>
+      <div class="row" style="margin-bottom:10px;"><span style="color:var(--gold);"></span><h3 class="display" style="font-size:16px;">Tes charges annuelles, mensualisées pour toi</h3></div>
+      <p class="muted" style="font-size:14px;margin-bottom:10px;">Pour que la facture ne te fasse jamais peur, on te propose de mettre un peu de côté chaque mois</p>
       ${annualItems.map(i=>`
         <div class="list-row">
           <span>${esc(i.nom)}</span>
@@ -437,25 +460,24 @@ function renderDashboard(){
           <p class="muted" style="font-size:14px;margin-top:4px;">${encouragement}</p>
           ${situationBadge}
         </div>
-        <div style="font-size:36px;">🪙</div>
       </div>
     </div>
     ${birthdayBlock}
     ${pwdReminderBlock}
     <div class="grid3">
       <div class="card">
-        <div class="row" style="color:var(--green);margin-bottom:4px;font-size:12px;font-weight:700;">📈 REVENUS PRÉVUS / MOIS</div>
+        <div class="row" style="color:var(--green);margin-bottom:4px;font-size:12px;font-weight:700;">REVENUS PRÉVUS / MOIS</div>
         <p class="stat-value">${fmt(prevRevenu)}</p>
       </div>
       <div class="card">
-        <div class="row" style="color:var(--coral-soft);margin-bottom:4px;font-size:12px;font-weight:700;">📉 DÉPENSES PRÉVUES / MOIS</div>
+        <div class="row" style="color:var(--coral-soft);margin-bottom:4px;font-size:12px;font-weight:700;">DÉPENSES PRÉVUES / MOIS</div>
         <p class="stat-value">${fmt(prevDepenseTotal)}</p>
         ${prevEpargneProjets>0 ? `<p class="muted-dark" style="font-size:12px;margin-top:2px;">dont ${fmt(prevEpargneProjets)} pour tes projets</p>` : ""}
       </div>
       <div class="card" style="background:${prevSolde>=0?'rgba(111,207,151,0.12)':'rgba(233,106,86,0.12)'};border:1px solid ${prevSolde>=0?'var(--green)':'var(--coral)'};">
-        <div class="row" style="color:${prevSolde>=0?'var(--green)':'var(--coral-soft)'};margin-bottom:4px;font-size:12px;font-weight:700;">🐷 SOLDE PRÉVU / MOIS</div>
+        <div class="row" style="color:${prevSolde>=0?'var(--green)':'var(--coral-soft)'};margin-bottom:4px;font-size:12px;font-weight:700;">SOLDE PRÉVU / MOIS</div>
         <p class="stat-value">${prevSolde>=0?'+':''}${fmt(prevSolde)}</p>
-        <p class="muted-dark" style="font-size:12px;margin-top:2px;">${prevSolde>=0? "Tu vises l'équilibre, bravo 👏" : "Ton budget prévu est serré, regarde tes postes"}</p>
+        <p class="muted-dark" style="font-size:12px;margin-top:2px;">${prevSolde>=0? "Tu vises l'équilibre, bravo" : "Ton budget prévu est serré, regarde tes postes"}</p>
       </div>
     </div>
     ${annualBlock}
@@ -486,7 +508,7 @@ function renderComparatif(){
       <td>${d.mois}</td>
       <td style="text-align:right;color:var(--muted);">${soldePrev>=0?'+':''}${soldePrev} €</td>
       <td style="text-align:right;">${hasReel? `${soldeReel>=0?'+':''}${soldeReel} €` : '—'}</td>
-      <td style="text-align:right;">${hasReel ? (respecte? `<span class="pill pill-green">✅ Respecté</span>` : `<span class="pill pill-coral">⚠️ À surveiller</span>`) : '<span class="muted-dark">—</span>'}</td>
+      <td style="text-align:right;">${hasReel ? (respecte? `<span class="pill pill-green">Respecté</span>` : `<span class="pill pill-coral">À surveiller</span>`) : '<span class="muted-dark">—</span>'}</td>
     </tr>`;
   }).join("");
 
@@ -494,7 +516,7 @@ function renderComparatif(){
   return `
   <div class="card" id="comparatif-card">
     <div class="between" style="margin-bottom:16px;">
-      <div class="row"><span style="color:var(--gold);">✨</span><h3 class="display" style="font-size:16px;">Prévu vs Réel — vue d'ensemble ${comparatifYear}</h3></div>
+      <div class="row"><span style="color:var(--gold);"></span><h3 class="display" style="font-size:16px;">Prévu vs Réel — vue d'ensemble ${comparatifYear}</h3></div>
       <div class="row">
         <button class="btn btn-ghost" id="year-prev" style="padding:6px 10px;">◀</button>
         <span style="font-weight:600;padding:0 4px;">${comparatifYear}</span>
@@ -518,7 +540,7 @@ function renderComparatif(){
       <table>
         <thead><tr><th>Mois</th><th style="text-align:right;">Solde prévu</th><th style="text-align:right;">Solde réel</th><th style="text-align:right;">Statut</th></tr></thead>
         <tbody>
-          ${rows || `<tr><td colspan="4" style="text-align:center;padding:20px 0;" class="muted-dark">Encode un premier mois pour voir apparaître ton comparatif ✨</td></tr>`}
+          ${rows || `<tr><td colspan="4" style="text-align:center;padding:20px 0;" class="muted-dark">Encode un premier mois pour voir apparaître ton comparatif</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -566,7 +588,7 @@ function drawComparatifChart(){
 function attachDashboardListeners(){
   drawComparatifChart();
   const giftBtn = document.getElementById("btn-create-gift-project");
-  if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire 🎁"}; activeTab="projets"; projectsFormOpen=true; render(); });
+  if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire"}; activeTab="projets"; projectsFormOpen=true; render(); });
 
   document.getElementById("year-prev").addEventListener("click", ()=>{ comparatifYear--; render(); });
   document.getElementById("year-next").addEventListener("click", ()=>{ comparatifYear++; render(); });
@@ -608,8 +630,8 @@ function renderPostes(){
     ${postesFormOpen? `
     <div class="card">
       <div class="type-toggle" style="margin-bottom:16px;">
-        <button id="type-revenu" style="background:${posteFormType==='revenu'?'var(--royal)':'var(--bg-deep)'};color:${posteFormType==='revenu'?'var(--card)':'var(--muted)'};">💰 Revenu</button>
-        <button id="type-depense" style="background:${posteFormType==='depense'?'var(--coral)':'var(--bg-deep)'};color:${posteFormType==='depense'?'var(--cream)':'var(--muted)'};">🧾 Dépense</button>
+        <button id="type-revenu" style="background:${posteFormType==='revenu'?'var(--royal)':'var(--bg-deep)'};color:${posteFormType==='revenu'?'var(--card)':'var(--muted)'};">Revenu</button>
+        <button id="type-depense" style="background:${posteFormType==='depense'?'var(--coral)':'var(--bg-deep)'};color:${posteFormType==='depense'?'var(--cream)':'var(--muted)'};">Dépense</button>
       </div>
       <div class="field"><span>Nom du poste</span><input id="poste-nom" value="${esc(posteFieldStash.nom)}" placeholder="${posteFormType==='revenu'? 'Ex : Salaire, Freelance...' : 'Ex : Loyer, Assurance auto...'}" /></div>
       <div style="height:12px;"></div>
@@ -627,8 +649,8 @@ function renderPostes(){
     </div>` : ""}
 
     <div class="card">
-      <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--green);">📈</span><h3 class="display" style="font-size:16px;">Revenus</h3></div><span style="color:var(--green);font-weight:700;">${fmt(totalRev)}/mois</span></div>
-      ${revenus.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste ! ✨</p>` :
+      <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--green);"></span><h3 class="display" style="font-size:16px;">Revenus</h3></div><span style="color:var(--green);font-weight:700;">${fmt(totalRev)}/mois</span></div>
+      ${revenus.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste !</p>` :
         revenus.map(i=>`
         <div class="list-row">
           <div>
@@ -640,8 +662,8 @@ function renderPostes(){
     </div>
 
     <div class="card">
-      <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--coral-soft);">📉</span><h3 class="display" style="font-size:16px;">Dépenses</h3></div><span style="color:var(--coral-soft);font-weight:700;">${fmt(totalDep)}/mois</span></div>
-      ${depenses.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste ! ✨</p>` :
+      <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--coral-soft);"></span><h3 class="display" style="font-size:16px;">Dépenses</h3></div><span style="color:var(--coral-soft);font-weight:700;">${fmt(totalDep)}/mois</span></div>
+      ${depenses.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste !</p>` :
         depenses.map(i=>`
         <div class="list-row">
           <div>
@@ -677,12 +699,12 @@ function renderChipGroup(list, type){
 function renderSuggestions(){
   return `
   <div class="card">
-    <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--green);">📈 Revenus courants</h3></div>
+    <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--green);">Revenus courants</h3></div>
     ${renderChipGroup(SUGGESTIONS_REVENUS, 'revenu')}
     <div class="divider" style="margin:14px 0;"></div>
-    <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--coral-soft);">📉 Dépenses courantes</h3></div>
+    <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--coral-soft);">Dépenses courantes</h3></div>
     ${renderChipGroup(SUGGESTIONS_DEPENSES, 'depense')}
-    <p class="muted-dark" style="font-size:12px;margin-top:6px;margin-bottom:0;">Clique sur un poste pour l'ajouter, tu n'auras plus qu'à indiquer le montant 💛</p>
+    <p class="muted-dark" style="font-size:12px;margin-top:6px;margin-bottom:0;">Clique sur un poste pour l'ajouter, tu n'auras plus qu'à indiquer le montant</p>
   </div>`;
 }
 
@@ -717,7 +739,7 @@ function attachPostesListeners(){
       label.textContent = `Montant (${freqSelect.value==='mensuel'? 'par mois' : 'par an'})`;
       if(freqSelect.value==='annuel' && montantInput.value){
         preview.style.display='block';
-        preview.textContent = `💡 On te proposera de mettre ${fmtPrecise(Number(montantInput.value)/12)} de côté chaque mois pour cette facture.`;
+        preview.textContent = `On te proposera de mettre ${fmtPrecise(Number(montantInput.value)/12)} de côté chaque mois pour cette facture.`;
       } else { preview.style.display='none'; }
     }
     freqSelect.addEventListener("change", updatePreview);
@@ -803,7 +825,7 @@ function renderProjets(){
       </div>
     </div>` : ""}
 
-    ${projects.length===0 && !projectsFormOpen? `<div class="card"><p class="muted-dark" style="text-align:center;">Pas encore de projet. Et si tu te prévoyais une petite escapade ? 🌊</p></div>` : ""}
+    ${projects.length===0 && !projectsFormOpen? `<div class="card"><p class="muted-dark" style="text-align:center;">Pas encore de projet. Et si tu te prévoyais une petite escapade ?</p></div>` : ""}
 
     <div class="grid2">
       ${projects.map(p=>renderProjectCard(p)).join("")}
@@ -827,12 +849,12 @@ function renderProjectCard(p){
       </div>
       <button class="icon-btn" data-remove-projet="${p.id}">${ICONS.trash}</button>
     </div>
-    ${p.termine? `<p style="color:var(--green);font-weight:600;font-size:14px;margin:12px 0;">🎉 Objectif atteint, bravo !</p>` : `
+    ${p.termine? `<p style="color:var(--green);font-weight:600;font-size:14px;margin:12px 0;">Objectif atteint, bravo !</p>` : `
     <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
     <div class="between muted" style="font-size:12px;margin-bottom:10px;">
       <span>${fmt(total)} épargnés (${pct}%)</span><span>Reste ${fmt(reste)}</span>
     </div>
-    <p style="color:var(--gold);font-size:12px;margin-bottom:10px;">🪙 Conseil : ${fmt(p.suggestionMensuelle)}/mois${moisPourFinir? ` — à ce rythme, tu y es dans ${moisPourFinir} mois 🚀` : ""}</p>
+    <p style="color:var(--gold);font-size:12px;margin-bottom:10px;">Conseil : ${fmt(p.suggestionMensuelle)}/mois${moisPourFinir? ` — à ce rythme, tu y es dans ${moisPourFinir} mois` : ""}</p>
     `}
     <div style="display:flex;gap:8px;align-items:flex-end;">
       <div class="field" style="flex:1;"><span>Ce mois, j'ai mis de côté</span><input type="number" placeholder="€" id="log-input-${p.id}" /></div>
@@ -916,20 +938,20 @@ function renderProfil(){
   const situation = profile.situation || "celibataire";
   const nombreRevenus = Number(profile.nombreRevenus) || 1;
   const aEnfants = !!profile.aEnfants;
-  const nombreEnfants = Number(profile.nombreEnfants) || 0;
+  const enfants = Array.isArray(profile.enfants) ? profile.enfants : [];
   return `
     <h2 class="display" style="font-size:20px;margin-bottom:16px;">Ton profil</h2>
     <div class="card card-narrow">
       <div class="field"><span>Prénom</span><input id="profil-prenom" value="${esc(profile.prenom)}" /></div>
       <div style="height:12px;"></div>
       <div class="field"><span>Date de naissance</span><input id="profil-naissance" type="date" value="${esc(profile.naissance||'')}" /></div>
-      ${bday? `<p class="muted" style="font-size:12px;margin-top:10px;">Tu as ${bday.age} ans. Prochain anniversaire dans ${bday.daysUntil} jour${bday.daysUntil>1?'s':''} 🎂</p>` : ""}
+      ${bday? `<p class="muted" style="font-size:12px;margin-top:10px;">Tu as ${bday.age} ans. Prochain anniversaire dans ${bday.daysUntil} jour${bday.daysUntil>1?'s':''}</p>` : ""}
 
       <div style="height:16px;"></div>
       <div class="field"><span>Ta situation</span></div>
       <div class="type-toggle" style="margin-top:6px;">
-        <button type="button" id="profil-celibataire" style="background:${situation==='celibataire'?'var(--royal)':'var(--bg-deep)'};color:${situation==='celibataire'?'var(--card)':'var(--muted)'};">🙋 Célibataire</button>
-        <button type="button" id="profil-couple" style="background:${situation==='couple'?'var(--royal)':'var(--bg-deep)'};color:${situation==='couple'?'var(--card)':'var(--muted)'};">💞 En couple</button>
+        <button type="button" id="profil-celibataire" style="background:${situation==='celibataire'?'var(--royal)':'var(--bg-deep)'};color:${situation==='celibataire'?'var(--card)':'var(--muted)'};">Célibataire</button>
+        <button type="button" id="profil-couple" style="background:${situation==='couple'?'var(--royal)':'var(--bg-deep)'};color:${situation==='couple'?'var(--card)':'var(--muted)'};">En couple</button>
       </div>
       <div id="profil-revenus-block" style="display:${situation==='couple'?'block':'none'};margin-top:12px;">
         <div class="field"><span>Combien de revenus dans le foyer ?</span></div>
@@ -947,7 +969,8 @@ function renderProfil(){
         </div>
       </div>
       <div id="profil-nombre-enfants-block" style="display:${aEnfants?'block':'none'};margin-top:12px;">
-        <div class="field"><span>Combien d'enfants ?</span><input id="profil-nombre-enfants" type="number" min="1" value="${nombreEnfants||1}" /></div>
+        <div id="profil-enfants-list">${renderEnfantsRows(enfants, "profil")}</div>
+        <button type="button" class="btn btn-ghost" id="profil-add-enfant" style="margin-top:4px;">${ICONS.plus} Ajouter un enfant</button>
       </div>
 
       <div style="border-top:1px solid var(--card-lighter);margin-top:16px;padding-top:16px;">
@@ -962,14 +985,14 @@ function renderProfil(){
     </div>
 
     <div class="card card-narrow">
-      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔑 Ton compte</h3>
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">Ton compte</h3>
       <p class="muted" style="font-size:13px;margin-bottom:4px;">Identifiant : <strong style="color:var(--royal);">${esc(currentUser? currentUser.email.split('@')[0] : "")}</strong></p>
-      <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">☁️ Tes données sont privées, protégées par ton mot de passe, et te suivent automatiquement sur tous tes appareils.</p>
-      <button class="btn btn-ghost" id="btn-switch-profile">🔁 Se déconnecter</button>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">Tes données sont privées, protégées par ton mot de passe, et te suivent automatiquement sur tous tes appareils.</p>
+      <button class="btn btn-ghost" id="btn-switch-profile">Se déconnecter</button>
     </div>
 
     <div class="card card-narrow">
-      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔒 Changer mon mot de passe</h3>
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">Changer mon mot de passe</h3>
       <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">Si Hélène t'a communiqué un mot de passe généré automatiquement, change-le ici pour un mot de passe que toi seul(e) connais.</p>
       <div class="field"><span>Mot de passe actuel</span>
         <div class="pwd-field"><input id="pwd-current" type="password" autocomplete="current-password" /><button type="button" class="pwd-toggle" data-toggle-target="pwd-current"></button></div>
@@ -984,12 +1007,12 @@ function renderProfil(){
     </div>
 
     <div class="card card-narrow">
-      <h3 class="display" style="font-size:16px;margin-bottom:6px;">🔒 Tes données sont en sécurité</h3>
+      <h3 class="display" style="font-size:16px;margin-bottom:6px;">Tes données sont en sécurité</h3>
       <p class="muted" style="font-size:13px;margin-bottom:14px;">Tout ce que tu encodes est sauvegardé automatiquement sur ton compte, et reste disponible même si l'application est mise à jour. Tu peux aussi garder une copie de secours sur ton appareil :</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-ghost" id="btn-export">⬇️ Télécharger une sauvegarde</button>
+        <button class="btn btn-ghost" id="btn-export">Télécharger une sauvegarde</button>
         <label class="btn btn-ghost" style="cursor:pointer;margin:0;">
-          ⬆️ Restaurer une sauvegarde
+          Restaurer une sauvegarde
           <input type="file" id="btn-import" accept="application/json" style="display:none;" />
         </label>
       </div>
@@ -1003,37 +1026,60 @@ function attachProfilListeners(){
     situation: profile.situation || "celibataire",
     nombreRevenus: profile.nombreRevenus || 1,
     aEnfants: !!profile.aEnfants,
+    enfants: Array.isArray(profile.enfants) ? [...profile.enfants] : [],
   };
   const revenusBlock = document.getElementById("profil-revenus-block");
   const enfantsBlock = document.getElementById("profil-nombre-enfants-block");
+  const enfantsListEl = document.getElementById("profil-enfants-list");
   const btnCeli = document.getElementById("profil-celibataire");
   const btnCouple = document.getElementById("profil-couple");
   const btnRev1 = document.getElementById("profil-rev-1");
   const btnRev2 = document.getElementById("profil-rev-2");
   const btnEnfantsNon = document.getElementById("profil-enfants-non");
   const btnEnfantsOui = document.getElementById("profil-enfants-oui");
+  const btnAddEnfant = document.getElementById("profil-add-enfant");
 
   function styleToggle(activeBtn, inactiveBtn){
     activeBtn.style.background = "var(--royal)"; activeBtn.style.color = "var(--card)";
     inactiveBtn.style.background = "var(--bg-deep)"; inactiveBtn.style.color = "var(--muted)";
   }
+  function syncEnfantsFromInputs(){ profilState.enfants = readEnfantsRows(profilState.enfants.length, "profil"); }
+  function renderEnfantsList(){
+    enfantsListEl.innerHTML = renderEnfantsRows(profilState.enfants, "profil");
+    enfantsListEl.querySelectorAll("[data-remove-enfant]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        syncEnfantsFromInputs();
+        profilState.enfants.splice(Number(btn.dataset.removeEnfant), 1);
+        renderEnfantsList();
+      });
+    });
+  }
+
   btnCeli.addEventListener("click", ()=>{ profilState.situation="celibataire"; profilState.nombreRevenus=1; styleToggle(btnCeli, btnCouple); revenusBlock.style.display="none"; });
   btnCouple.addEventListener("click", ()=>{ profilState.situation="couple"; styleToggle(btnCouple, btnCeli); revenusBlock.style.display="block"; });
   btnRev1.addEventListener("click", ()=>{ profilState.nombreRevenus=1; styleToggle(btnRev1, btnRev2); });
   btnRev2.addEventListener("click", ()=>{ profilState.nombreRevenus=2; styleToggle(btnRev2, btnRev1); });
   btnEnfantsNon.addEventListener("click", ()=>{ profilState.aEnfants=false; styleToggle(btnEnfantsNon, btnEnfantsOui); enfantsBlock.style.display="none"; });
-  btnEnfantsOui.addEventListener("click", ()=>{ profilState.aEnfants=true; styleToggle(btnEnfantsOui, btnEnfantsNon); enfantsBlock.style.display="block"; });
+  btnEnfantsOui.addEventListener("click", ()=>{
+    profilState.aEnfants=true; styleToggle(btnEnfantsOui, btnEnfantsNon); enfantsBlock.style.display="block";
+    if(profilState.enfants.length===0){ profilState.enfants.push({naissance:"", niveauEtude:NIVEAUX_ETUDE[0]}); renderEnfantsList(); }
+  });
+  btnAddEnfant.addEventListener("click", ()=>{
+    syncEnfantsFromInputs();
+    profilState.enfants.push({naissance:"", niveauEtude:NIVEAUX_ETUDE[0]});
+    renderEnfantsList();
+  });
 
   document.getElementById("profil-save").addEventListener("click", ()=>{
     const prenom = document.getElementById("profil-prenom").value.trim();
-    const nombreEnfantsInput = document.getElementById("profil-nombre-enfants");
+    if(profilState.aEnfants) syncEnfantsFromInputs();
     profile = {
       prenom: prenom || profile.prenom,
       naissance: document.getElementById("profil-naissance").value,
       situation: profilState.situation,
       nombreRevenus: profilState.situation==="couple" ? profilState.nombreRevenus : 1,
       aEnfants: profilState.aEnfants,
-      nombreEnfants: profilState.aEnfants ? (Number(nombreEnfantsInput.value) || 1) : 0,
+      enfants: profilState.aEnfants ? profilState.enfants : [],
       consentementAdmin: document.getElementById("profil-consentement").checked,
     };
     saveProfile();
@@ -1065,7 +1111,7 @@ function attachProfilListeners(){
       await doChangePassword(oldPwd, newPwd);
       document.getElementById("pwd-current").value = "";
       document.getElementById("pwd-new").value = "";
-      feedback.textContent = "✅ Mot de passe mis à jour. Prochain renouvellement dans 3 mois.";
+      feedback.textContent = "Mot de passe mis à jour. Prochain renouvellement dans 3 mois.";
       feedback.style.color = "var(--green)"; feedback.style.display = "block";
     }catch(e){
       feedback.textContent = translateAuthError(e.code);
@@ -1102,11 +1148,11 @@ function attachProfilListeners(){
         projects = data.projects;
         actuals = data.actuals || {};
         saveProfile(); saveItems(); saveProjects(); saveActuals();
-        feedback.textContent = "✅ Sauvegarde restaurée avec succès dans ton espace actuel !";
+        feedback.textContent = "Sauvegarde restaurée avec succès dans ton espace actuel !";
         feedback.style.color = "var(--green)";
         render();
       }catch(err){
-        feedback.textContent = "⚠️ Ce fichier ne semble pas être une sauvegarde Aurya valide.";
+        feedback.textContent = "Ce fichier ne semble pas être une sauvegarde Aurya valide.";
         feedback.style.color = "var(--coral-soft)";
       }
     };
@@ -1133,7 +1179,7 @@ async function loadChat(){
 function renderChat(){
   if(chatMessages === null){
     return `
-    <h2 class="display" style="font-size:20px;margin-bottom:8px;">💬 Discuter avec Hélène</h2>
+    <h2 class="display" style="font-size:20px;margin-bottom:8px;">Discuter avec Hélène</h2>
     <div class="card"><p class="muted-dark" style="text-align:center;">Chargement de la conversation...</p></div>`;
   }
   // Le style (bulle "toi" / "Hélène") est déduit d'une comparaison booléenne, jamais du contenu stocké
@@ -1146,11 +1192,11 @@ function renderChat(){
     </div>`;
   }).join("");
   return `
-    <h2 class="display" style="font-size:20px;margin-bottom:8px;">💬 Discuter avec Hélène</h2>
+    <h2 class="display" style="font-size:20px;margin-bottom:8px;">Discuter avec Hélène</h2>
     <p class="muted" style="font-size:14px;margin-bottom:16px;">Une question sur ton budget ? Écris ici, Hélène te répond directement.</p>
     <div class="card">
       <div class="chat-thread" id="chat-thread">
-        ${thread || `<p class="muted-dark" style="text-align:center;margin:0;">Aucun message pour l'instant. Dis bonjour ! 👋</p>`}
+        ${thread || `<p class="muted-dark" style="text-align:center;margin:0;">Aucun message pour l'instant. Dis bonjour !</p>`}
       </div>
       <div class="chat-input-row">
         <input id="chat-input" placeholder="Écris ton message..." maxlength="2000" />
@@ -1209,7 +1255,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-012</span>
+          <span class="version-tag">V01-017</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -1225,14 +1271,7 @@ function renderShell(){
     ${content}
 
     <footer class="legal-footer">
-      <div class="legal-links">
-        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-      </div>
+      <div class="legal-links">${renderLegalLinks()}</div>
       <div class="copyright-block">
         <p>© ${new Date().getFullYear()} Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
         <p>Site développé par Hélène Laruelle.</p>
@@ -1257,10 +1296,10 @@ function renderReglementTab(){
   const paragraphs = roiText.split("\n\n").map(p=>`<p style="font-size:13px;line-height:1.7;color:var(--muted);margin-bottom:12px;">${esc(p)}</p>`).join("");
   const accepteLe = profile.roiAccepteLe ? new Date(profile.roiAccepteLe).toLocaleString('fr-BE', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : null;
   return `
-    <h2 class="display" style="font-size:20px;margin-bottom:16px;">📋 Règlement d'ordre intérieur</h2>
+    <h2 class="display" style="font-size:20px;margin-bottom:16px;">Règlement d'ordre intérieur</h2>
     <div class="card">
       ${paragraphs}
-      ${accepteLe? `<p class="muted-dark" style="font-size:12px;margin-top:16px;border-top:1px solid var(--card-lighter);padding-top:12px;">✅ Accepté le ${accepteLe}.</p>` : ""}
+      ${accepteLe? `<p class="muted-dark" style="font-size:12px;margin-top:16px;border-top:1px solid var(--card-lighter);padding-top:12px;">Accepté le ${accepteLe}.</p>` : ""}
     </div>
   `;
 }

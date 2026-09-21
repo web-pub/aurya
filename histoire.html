@@ -18,31 +18,24 @@
     <div class="story-grid">
       <div class="card story-block">
         <img src="" id="story-logo" alt="Aurya" class="story-visual story-visual-logo" />
-        <h1 class="display" style="font-size:22px;margin:16px 0 14px;">✨ Notre histoire</h1>
+        <h1 class="display" style="font-size:22px;margin:16px 0 14px;">Notre histoire</h1>
         <div id="histoire-content"><p class="muted-dark">Chargement...</p></div>
       </div>
 
       <div class="card story-block">
         <img src="assets/helene-photo.jpg" alt="Hélène Laruelle" class="story-visual story-visual-photo" />
-        <h2 class="display" style="font-size:22px;margin:16px 0 14px;">🙋 À propos de moi</h2>
+        <h2 class="display" style="font-size:22px;margin:16px 0 14px;">À propos de moi</h2>
         <div id="apropos-content"><p class="muted-dark">Chargement...</p></div>
       </div>
     </div>
 
     <div style="height:16px;"></div>
     <div class="card" style="text-align:center;">
-      <a href="contact.html" class="btn btn-ghost">✉️ Me contacter</a>
+      <a href="contact.html" class="btn btn-ghost">Me contacter</a>
     </div>
 
     <footer class="legal-footer">
-      <div class="legal-links">
-        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-      </div>
+      <div class="legal-links" id="legal-links-mount"></div>
       <div class="copyright-block">
         <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
         <p>Site développé par Hélène Laruelle.</p>
@@ -57,6 +50,7 @@ document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("histo
 document.getElementById("story-logo").src = LOGO_WORDMARK;
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
+document.getElementById("legal-links-mount").innerHTML = renderLegalLinks();
 
 const DEFAULT_HISTOIRE = `Aurya trouve sa racine dans le mot latin "aurum", qui signifie l'or. Depuis l'Antiquité, l'or est le symbole de la valeur durable, de la stabilité, de la richesse construite dans le temps, de la confiance et de la transmission.
 

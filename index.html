@@ -18,38 +18,31 @@
     <p class="slogan" id="txt-slogan"></p>
     <p class="pitch" id="txt-pitch"></p>
     <div class="hero-cta">
-      <a href="connexion.html" class="btn btn-primary">🔑 Se connecter</a>
-      <a href="connexion.html#devenir-membre" class="btn btn-ghost">✨ Devenir membre</a>
+      <a href="connexion.html" class="btn btn-primary">Se connecter</a>
+      <a href="connexion.html#devenir-membre" class="btn btn-ghost">Devenir membre</a>
     </div>
   </div>
 
   <div class="features">
     <div class="feature-card">
-      <div class="emoji" id="f1-emoji"></div>
+      <div class="feature-icon" id="f1-icon"></div>
       <h3 id="f1-titre"></h3>
       <p id="f1-texte"></p>
     </div>
     <div class="feature-card">
-      <div class="emoji" id="f2-emoji"></div>
+      <div class="feature-icon" id="f2-icon"></div>
       <h3 id="f2-titre"></h3>
       <p id="f2-texte"></p>
     </div>
     <div class="feature-card">
-      <div class="emoji" id="f3-emoji"></div>
+      <div class="feature-icon" id="f3-icon"></div>
       <h3 id="f3-titre"></h3>
       <p id="f3-texte"></p>
     </div>
   </div>
 
   <footer class="legal-footer">
-    <div class="legal-links">
-      <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-      <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-      <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-      <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-      <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-      <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-    </div>
+    <div class="legal-links" id="legal-links-mount"></div>
     <div class="copyright-block">
       <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
       <p>Site développé par Hélène Laruelle.</p>
@@ -63,6 +56,7 @@ document.getElementById("hero-logo").src = LOGO_WORDMARK;
 document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("index");
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
+document.getElementById("legal-links-mount").innerHTML = renderLegalLinks();
 
 /* Contenu par défaut (utilisé tant que rien n'a été personnalisé depuis
    l'onglet "Contenu du site" de l'espace admin, ou si Firebase n'est pas
@@ -70,24 +64,26 @@ document.getElementById("year").textContent = new Date().getFullYear();
 const DEFAULT_CONTENT = {
   slogan: "« Chaque euro trouve sa place. »",
   pitch: "Aurya transforme le budget en un espace doux et clair, où chaque décision devient plus simple. Une lumière dans le quotidien : suivi des revenus et dépenses, mensualisation des charges annuelles, projets d'épargne personnalisés, et un accompagnement personnalisé si tu le souhaites.",
-  f1_emoji: "📊", f1_titre: "Postes complets", f1_texte: "Une bibliothèque de plus de 60 postes courants (logement, enfants, animaux, épargne...), en mensuel ou en annuel, convertis automatiquement.",
-  f2_emoji: "🎯", f2_titre: "Projets d'épargne", f2_texte: "Fixe-toi un objectif (voyage, cadeau, imprévu...) et suis ce que tu arrives réellement à mettre de côté chaque mois.",
-  f3_emoji: "💬", f3_titre: "Accompagnement", f3_texte: "Si tu le souhaites, discute directement avec Hélène pour obtenir des conseils personnalisés sur ton budget.",
+  f1_titre: "Postes complets", f1_texte: "Une bibliothèque de plus de 60 postes courants (logement, enfants, animaux, épargne...), en mensuel ou en annuel, convertis automatiquement.",
+  f2_titre: "Projets d'épargne", f2_texte: "Fixe-toi un objectif (voyage, cadeau, imprévu...) et suis ce que tu arrives réellement à mettre de côté chaque mois.",
+  f3_titre: "Accompagnement", f3_texte: "Si tu le souhaites, discute directement avec Hélène pour obtenir des conseils personnalisés sur ton budget.",
 };
 
 function applyContent(c){
   document.getElementById("txt-slogan").textContent = c.slogan;
   document.getElementById("txt-pitch").textContent = c.pitch;
-  document.getElementById("f1-emoji").textContent = c.f1_emoji;
   document.getElementById("f1-titre").textContent = c.f1_titre;
   document.getElementById("f1-texte").textContent = c.f1_texte;
-  document.getElementById("f2-emoji").textContent = c.f2_emoji;
   document.getElementById("f2-titre").textContent = c.f2_titre;
   document.getElementById("f2-texte").textContent = c.f2_texte;
-  document.getElementById("f3-emoji").textContent = c.f3_emoji;
   document.getElementById("f3-titre").textContent = c.f3_titre;
   document.getElementById("f3-texte").textContent = c.f3_texte;
 }
+
+// Icônes fixes (identité visuelle de la marque, non éditables — cohérence "site pro")
+document.getElementById("f1-icon").innerHTML = ICONS.chart;
+document.getElementById("f2-icon").innerHTML = ICONS.target;
+document.getElementById("f3-icon").innerHTML = ICONS.chat;
 
 applyContent(DEFAULT_CONTENT);
 if(initFirebaseApp()){

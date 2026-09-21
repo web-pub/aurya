@@ -14,7 +14,7 @@
 <body>
   <div id="site-topbar-mount"></div>
   <div class="wrap" style="max-width:700px;margin:0 auto;padding:24px 16px 60px;">
-    <h1 class="display" style="font-size:24px;margin-bottom:6px;">💛 Livre d'or</h1>
+    <h1 class="display" style="font-size:24px;margin-bottom:6px;">Livre d'or</h1>
     <p class="muted" style="font-size:14px;margin-bottom:20px;">Un mot à laisser sur ton expérience avec Aurya ? Il sera publié ici après validation par Hélène.</p>
 
     <div class="card" style="margin-bottom:24px;">
@@ -34,14 +34,7 @@
     <div id="lo-list"><p class="muted-dark" style="text-align:center;">Chargement...</p></div>
 
     <footer class="legal-footer">
-      <div class="legal-links">
-        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-      </div>
+      <div class="legal-links" id="legal-links-mount"></div>
       <div class="copyright-block">
         <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
         <p>Site développé par Hélène Laruelle.</p>
@@ -55,6 +48,7 @@
 document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("livre-or");
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
+document.getElementById("legal-links-mount").innerHTML = renderLegalLinks();
 
 let db = null;
 if(initFirebaseApp()){
@@ -79,7 +73,7 @@ if(initFirebaseApp()){
         statut: "nouveau",
         creeLe: new Date().toISOString(),
       });
-      okEl.textContent = "✅ Merci ! Ton message sera visible ici dès qu'Hélène l'aura validé.";
+      okEl.textContent = "Merci ! Ton message sera visible ici dès qu'Hélène l'aura validé.";
       okEl.style.display = "block";
       document.getElementById("lo-prenom").value = "";
       document.getElementById("lo-message").value = "";

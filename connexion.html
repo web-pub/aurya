@@ -62,14 +62,7 @@
   </div>
 
   <footer class="legal-footer">
-    <div class="legal-links">
-      <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-      <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-      <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-      <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-      <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-      <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-    </div>
+    <div class="legal-links" id="legal-links-mount"></div>
     <div class="copyright-block">
       <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
       <p>Site développé par Hélène Laruelle.</p>
@@ -82,6 +75,7 @@
 document.getElementById("logo").src = LOGO_WORDMARK;
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
+document.getElementById("legal-links-mount").innerHTML = renderLegalLinks();
 
 const EYE_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_CLOSED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.6 10.6 0 0 1 12 5c7 0 11 7 11 7a13.2 13.2 0 0 1-2.6 3.4M6.6 6.6A13.4 13.4 0 0 0 1 12s4 7 11 7c1.3 0 2.5-.2 3.6-.6"/></svg>';
@@ -152,7 +146,7 @@ if(!initFirebaseApp()){
         statut: "nouvelle",
         creeLe: new Date().toISOString(),
       });
-      okEl.textContent = "✅ Merci ! Ta demande a bien été envoyée, Hélène te recontacte rapidement.";
+      okEl.textContent = "Merci ! Ta demande a bien été envoyée, Hélène te recontacte rapidement.";
       okEl.style.display = "block";
       document.getElementById("req-nom").value = "";
       document.getElementById("req-prenom").value = "";
