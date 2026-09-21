@@ -323,6 +323,7 @@ const ICONS = {
   chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
   user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>',
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
   smallplus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 5v14M5 12h14"/></svg>',
   shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/></svg>',
@@ -336,6 +337,14 @@ function fmt(n){ const v=Number(n)||0; return v.toLocaleString("fr-BE",{minimumF
 function fmtPrecise(n){ const v=Number(n)||0; return v.toLocaleString("fr-BE",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"; }
 function monthKey(y,m){ return `${y}-${String(m+1).padStart(2,"0")}`; }
 function monthlyEquivalent(item){ const m=Number(item.montant)||0; return item.frequence==="annuel"? m/12 : m; }
+/* Un poste avec une date de fin (ex: fin de crédit) ne compte plus dans les totaux
+   une fois cette date dépassée — utile pour les crédits, abonnements à durée limitée... */
+function itemEstActif(item){
+  if(!item.dateFin) return true;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const fin = new Date(item.dateFin+"T00:00:00");
+  return fin >= today;
+}
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function getGreeting(prenom){
