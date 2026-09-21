@@ -1,4 +1,4 @@
-// Projet : Aurya — Version V01-017
+// Projet : Aurya — Version V01-019
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {

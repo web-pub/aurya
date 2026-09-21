@@ -27,6 +27,7 @@ let activeTab = "accueil";
 let prefillProject = null;
 
 let postesFormOpen = false;
+let editingItemId = null;
 let posteFormType = "revenu";
 let posteFormCat = CATEGORIES_REVENU[0];
 
@@ -378,8 +379,8 @@ function attachOnboardingListeners(){
 function computeTotals(srcItems, srcProjects){
   const it = srcItems || items;
   const pr = srcProjects || projects;
-  const prevRevenu = it.filter(i=>i.type==="revenu").reduce((s,i)=>s+monthlyEquivalent(i),0);
-  const prevDepenseItems = it.filter(i=>i.type==="depense").reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const prevRevenu = it.filter(i=>i.type==="revenu" && itemEstActif(i)).reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const prevDepenseItems = it.filter(i=>i.type==="depense" && itemEstActif(i)).reduce((s,i)=>s+monthlyEquivalent(i),0);
   const prevEpargneProjets = pr.reduce((s,p)=> p.termine? s : s+(Number(p.suggestionMensuelle)||0), 0);
   const prevDepenseTotal = prevDepenseItems + prevEpargneProjets;
   return { prevRevenu, prevDepenseItems, prevEpargneProjets, prevDepenseTotal, prevSolde: prevRevenu-prevDepenseTotal };
@@ -389,7 +390,7 @@ function renderDashboard(){
   const bday = birthdayInfo(profile.naissance);
   const { prevRevenu, prevDepenseTotal, prevEpargneProjets, prevSolde } = computeTotals();
   const encouragement = ENCOURAGEMENTS[new Date().getDate() % ENCOURAGEMENTS.length];
-  const annualItems = items.filter(i=>i.frequence==="annuel");
+  const annualItems = items.filter(i=>i.frequence==="annuel" && i.type==="depense" && itemEstActif(i));
 
   const situationLabel = profile.situation==="couple"
     ? `En couple · ${Number(profile.nombreRevenus)||1} revenu${(Number(profile.nombreRevenus)||1)>1?'s':''}`
@@ -611,8 +612,8 @@ function attachDashboardListeners(){
 function renderPostes(){
   const revenus = items.filter(i=>i.type==="revenu");
   const depenses = items.filter(i=>i.type==="depense");
-  const totalRev = revenus.reduce((s,i)=>s+monthlyEquivalent(i),0);
-  const totalDep = depenses.reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const totalRev = revenus.filter(itemEstActif).reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const totalDep = depenses.filter(itemEstActif).reduce((s,i)=>s+monthlyEquivalent(i),0);
   const cats = posteFormType==="revenu"? CATEGORIES_REVENU : CATEGORIES_DEPENSE;
 
   return `
@@ -642,8 +643,11 @@ function renderPostes(){
       <div style="height:12px;"></div>
       <div class="field"><span id="poste-montant-label">Montant (par mois)</span><input id="poste-montant" type="number" value="${esc(posteFieldStash.montant)}" placeholder="€" /></div>
       <p id="poste-annual-preview" style="display:none;color:var(--gold);font-size:12px;margin-top:8px;"></p>
+      <div style="height:12px;"></div>
+      <div class="field"><span>Date de fin (optionnel — ex : fin de crédit)</span><input id="poste-date-fin" type="date" value="${esc(posteFieldStash.dateFin||'')}" /></div>
+      <p class="muted-dark" style="font-size:12px;margin-top:6px;">Laisse vide si ce poste est permanent. Une fois cette date passée, il ne comptera plus dans tes totaux.</p>
       <div class="form-actions">
-        <button class="btn btn-primary" id="poste-save">Enregistrer</button>
+        <button class="btn btn-primary" id="poste-save">${editingItemId? "Enregistrer les modifications" : "Enregistrer"}</button>
         <button class="btn btn-ghost" id="poste-cancel">Annuler</button>
       </div>
     </div>` : ""}
@@ -651,27 +655,37 @@ function renderPostes(){
     <div class="card">
       <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--green);"></span><h3 class="display" style="font-size:16px;">Revenus</h3></div><span style="color:var(--green);font-weight:700;">${fmt(totalRev)}/mois</span></div>
       ${revenus.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste !</p>` :
-        revenus.map(i=>`
-        <div class="list-row">
+        revenus.map(i=>{
+          const actif = itemEstActif(i);
+          return `
+        <div class="list-row" style="${actif?'':'opacity:.55;'}">
           <div>
-            <p style="margin:0;font-weight:500;">${esc(i.nom)}</p>
-            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}</p>
+            <p style="margin:0;font-weight:500;">${esc(i.nom)}${!actif? ' <span class="muted-dark">(terminé)</span>' : ''}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · soit ${fmtPrecise(monthlyEquivalent(i))}/mois en moyenne` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
           </div>
-          <button class="icon-btn" data-remove="${i.id}">${ICONS.trash}</button>
-        </div>`).join("")}
+          <div style="display:flex;gap:4px;">
+            <button class="icon-btn" data-edit="${i.id}">${ICONS.edit}</button>
+            <button class="icon-btn" data-remove="${i.id}">${ICONS.trash}</button>
+          </div>
+        </div>`;}).join("")}
     </div>
 
     <div class="card">
       <div class="between" style="margin-bottom:10px;"><div class="row"><span style="color:var(--coral-soft);"></span><h3 class="display" style="font-size:16px;">Dépenses</h3></div><span style="color:var(--coral-soft);font-weight:700;">${fmt(totalDep)}/mois</span></div>
       ${depenses.length===0? `<p class="muted-dark" style="font-size:14px;">Rien ici pour l'instant. Ajoute ton premier poste !</p>` :
-        depenses.map(i=>`
-        <div class="list-row">
+        depenses.map(i=>{
+          const actif = itemEstActif(i);
+          return `
+        <div class="list-row" style="${actif?'':'opacity:.55;'}">
           <div>
-            <p style="margin:0;font-weight:500;">${esc(i.nom)}</p>
-            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}</p>
+            <p style="margin:0;font-weight:500;">${esc(i.nom)}${!actif? ' <span class="muted-dark">(terminé)</span>' : ''}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
           </div>
-          <button class="icon-btn" data-remove="${i.id}">${ICONS.trash}</button>
-        </div>`).join("")}
+          <div style="display:flex;gap:4px;">
+            <button class="icon-btn" data-edit="${i.id}">${ICONS.edit}</button>
+            <button class="icon-btn" data-remove="${i.id}">${ICONS.trash}</button>
+          </div>
+        </div>`;}).join("")}
     </div>
   `;
 }
@@ -710,7 +724,7 @@ function renderSuggestions(){
 
 function attachPostesListeners(){
   const openBtn = document.getElementById("btn-open-poste");
-  if(openBtn) openBtn.addEventListener("click", ()=>{ postesFormOpen=true; posteFormType="revenu"; posteFormCat=CATEGORIES_REVENU[0]; posteFieldStash={nom:"",montant:"",frequence:"mensuel"}; render(); });
+  if(openBtn) openBtn.addEventListener("click", ()=>{ postesFormOpen=true; editingItemId=null; posteFormType="revenu"; posteFormCat=CATEGORIES_REVENU[0]; posteFieldStash={nom:"",montant:"",frequence:"mensuel",dateFin:""}; render(); });
 
   const toggleSugg = document.getElementById("toggle-suggestions");
   if(toggleSugg) toggleSugg.addEventListener("click", ()=>{ suggestionsOpen=!suggestionsOpen; render(); });
@@ -720,9 +734,10 @@ function attachPostesListeners(){
       const [type, idxStr] = btn.dataset.suggest.split(":");
       const sugg = (type==='revenu'? SUGGESTIONS_REVENUS : SUGGESTIONS_DEPENSES)[Number(idxStr)];
       postesFormOpen = true;
+      editingItemId = null;
       posteFormType = type;
       posteFormCat = sugg.categorie;
-      posteFieldStash = { nom: sugg.nom, montant: "", frequence: sugg.frequence };
+      posteFieldStash = { nom: sugg.nom, montant: "", frequence: sugg.frequence, dateFin: "" };
       render();
       const montantEl = document.getElementById("poste-montant");
       if(montantEl) montantEl.focus();
@@ -759,18 +774,44 @@ function attachPostesListeners(){
       const nom = document.getElementById("poste-nom").value.trim();
       const montant = document.getElementById("poste-montant").value;
       if(!nom || !montant) return;
-      items.push({
-        id: uid(), type: posteFormType, nom,
-        categorie: document.getElementById("poste-cat").value,
-        frequence: document.getElementById("poste-freq").value,
-        montant: Number(montant),
-      });
+      const dateFin = document.getElementById("poste-date-fin").value;
+      if(editingItemId){
+        items = items.map(i => i.id===editingItemId ? {
+          ...i, type: posteFormType, nom,
+          categorie: document.getElementById("poste-cat").value,
+          frequence: document.getElementById("poste-freq").value,
+          montant: Number(montant),
+          dateFin,
+        } : i);
+      } else {
+        items.push({
+          id: uid(), type: posteFormType, nom,
+          categorie: document.getElementById("poste-cat").value,
+          frequence: document.getElementById("poste-freq").value,
+          montant: Number(montant),
+          dateFin,
+        });
+      }
       saveItems();
       postesFormOpen=false;
+      editingItemId=null;
       render();
     });
-    document.getElementById("poste-cancel").addEventListener("click", ()=>{ postesFormOpen=false; render(); });
+    document.getElementById("poste-cancel").addEventListener("click", ()=>{ postesFormOpen=false; editingItemId=null; render(); });
   }
+
+  document.querySelectorAll("[data-edit]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const item = items.find(i=>i.id===btn.dataset.edit);
+      if(!item) return;
+      postesFormOpen = true;
+      editingItemId = item.id;
+      posteFormType = item.type;
+      posteFormCat = item.categorie;
+      posteFieldStash = { nom: item.nom, montant: String(item.montant), frequence: item.frequence, dateFin: item.dateFin||"" };
+      render();
+    });
+  });
 
   document.querySelectorAll("[data-remove]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
@@ -780,14 +821,16 @@ function attachPostesListeners(){
     });
   });
 }
-let posteFieldStash = {nom:"", montant:"", frequence:"mensuel"};
+let posteFieldStash = {nom:"", montant:"", frequence:"mensuel", dateFin:""};
 function stashPosteFields(){
   const nomEl = document.getElementById("poste-nom");
   const montantEl = document.getElementById("poste-montant");
   const freqEl = document.getElementById("poste-freq");
+  const dateFinEl = document.getElementById("poste-date-fin");
   if(nomEl) posteFieldStash.nom = nomEl.value;
   if(montantEl) posteFieldStash.montant = montantEl.value;
   if(freqEl) posteFieldStash.frequence = freqEl.value;
+  if(dateFinEl) posteFieldStash.dateFin = dateFinEl.value;
 }
 
 /* ---------------------------------- PROJETS ---------------------------------- */
@@ -1255,7 +1298,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-017</span>
+          <span class="version-tag">V01-019</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">

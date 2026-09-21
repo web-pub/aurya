@@ -116,7 +116,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">Admin</span>
-          <span class="version-tag">V01-017</span>
+          <span class="version-tag">V01-019</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -234,8 +234,8 @@ function renderMembres(){
 }
 
 function computeTotalsFor(srcItems, srcProjects){
-  const prevRevenu = srcItems.filter(i=>i.type==="revenu").reduce((s,i)=>s+monthlyEquivalent(i),0);
-  const prevDepenseItems = srcItems.filter(i=>i.type==="depense").reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const prevRevenu = srcItems.filter(i=>i.type==="revenu" && itemEstActif(i)).reduce((s,i)=>s+monthlyEquivalent(i),0);
+  const prevDepenseItems = srcItems.filter(i=>i.type==="depense" && itemEstActif(i)).reduce((s,i)=>s+monthlyEquivalent(i),0);
   const prevEpargneProjets = srcProjects.reduce((s,p)=> p.termine? s : s+(Number(p.suggestionMensuelle)||0), 0);
   const prevDepenseTotal = prevDepenseItems + prevEpargneProjets;
   return { prevRevenu, prevDepenseTotal, prevSolde: prevRevenu-prevDepenseTotal };
