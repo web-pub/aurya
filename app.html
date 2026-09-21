@@ -386,6 +386,65 @@ function computeTotals(srcItems, srcProjects){
   return { prevRevenu, prevDepenseItems, prevEpargneProjets, prevDepenseTotal, prevSolde: prevRevenu-prevDepenseTotal };
 }
 
+/* Repères indicatifs (informationnels, pas un conseil personnalisé) pour l'analyse
+   revenus/dépenses : seuils au-delà desquels une catégorie mérite attention. */
+const RATIO_RULES = {
+  "Logement": { orange: 0.33, rouge: 0.40 },
+  "Crédits / dettes": { orange: 0.20, rouge: 0.30 },
+};
+function ratioStatus(pct, rule){
+  if(!rule) return null;
+  if(pct > rule.rouge) return "rouge";
+  if(pct > rule.orange) return "orange";
+  return "vert";
+}
+function renderAnalyseRatios(){
+  const { prevRevenu, prevDepenseTotal } = computeTotals();
+  if(prevRevenu <= 0) return "";
+  const depenseItems = items.filter(i=>i.type==="depense" && itemEstActif(i));
+  const parCategorie = {};
+  depenseItems.forEach(i=>{
+    const cat = (i.categorie==="Crédits" || i.categorie==="Banque & dettes") ? "Crédits / dettes" : i.categorie;
+    parCategorie[cat] = (parCategorie[cat]||0) + monthlyEquivalent(i);
+  });
+  if(Object.keys(parCategorie).length===0) return "";
+
+  const rows = Object.keys(parCategorie).map(cat=>{
+    const montant = parCategorie[cat];
+    const pct = montant / prevRevenu;
+    const status = ratioStatus(pct, RATIO_RULES[cat]);
+    return { cat, montant, pct, status };
+  }).sort((a,b)=>b.montant-a.montant);
+
+  const pctTotal = prevDepenseTotal / prevRevenu;
+  const totalStatus = pctTotal>0.9? "rouge" : pctTotal>0.7? "orange" : "vert";
+  const statusColor = { vert:"var(--green)", orange:"var(--gold)", rouge:"var(--coral)" };
+  const statusLabel = { vert:"OK", orange:"À surveiller", rouge:"À corriger" };
+  const pill = (status) => status? `<span class="pill" style="background:${statusColor[status]}26;color:${statusColor[status]};margin-left:8px;">${statusLabel[status]}</span>` : "";
+
+  return `
+  <div class="card">
+    <h3 class="display" style="font-size:16px;margin-bottom:6px;">Analyse : revenus vs dépenses</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:16px;">Répartition théorique de ton budget prévisionnel, par catégorie.</p>
+
+    <div class="between" style="margin-bottom:4px;">
+      <span style="font-size:14px;font-weight:600;">Dépenses totales / revenus</span>
+      <span style="font-weight:700;color:${statusColor[totalStatus]};">${Math.round(pctTotal*100)}%${pill(totalStatus)}</span>
+    </div>
+    <div class="progress-track" style="margin:8px 0 18px;"><div class="progress-fill" style="width:${Math.min(pctTotal*100,100)}%;background:${statusColor[totalStatus]};"></div></div>
+
+    ${rows.map(r=>`
+      <div class="between" style="margin-bottom:10px;">
+        <span style="font-size:13px;">${esc(r.cat)}</span>
+        <span style="font-size:13px;white-space:nowrap;">
+          <span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${Math.round(r.pct*100)}%${pill(r.status)}
+        </span>
+      </div>`).join("")}
+
+    <p class="muted-dark" style="font-size:11px;margin-top:14px;border-top:1px solid var(--card-lighter);padding-top:10px;">Repères indicatifs et généraux, pas un conseil personnalisé : logement au-delà de 33% des revenus, ou crédits &amp; dettes au-delà de 20-30%, sont des seuils souvent cités comme méritant attention.</p>
+  </div>`;
+}
+
 function renderDashboard(){
   const bday = birthdayInfo(profile.naissance);
   const { prevRevenu, prevDepenseTotal, prevEpargneProjets, prevSolde } = computeTotals();
@@ -482,6 +541,7 @@ function renderDashboard(){
       </div>
     </div>
     ${annualBlock}
+    ${renderAnalyseRatios()}
     ${renderComparatif()}
   `;
 }
@@ -1298,7 +1358,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-019</span>
+          <span class="version-tag">V01-020</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
