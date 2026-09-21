@@ -710,10 +710,8 @@ function drawComparatifChart(){
 }
 
 function attachDashboardListeners(){
-  drawComparatifChart();
-  const giftBtn = document.getElementById("btn-create-gift-project");
-  if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire"}; activeTab="projets"; projectsFormOpen=true; render(); });
-
+  // Ces deux listeners sont attachés en premier, avant tout code pouvant potentiellement
+  // échouer (graphique...), pour qu'ils fonctionnent quoi qu'il arrive ensuite.
   document.querySelectorAll("[data-dismiss-alerte]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const ignorees = Array.isArray(profile.alertesIgnorees) ? [...profile.alertesIgnorees] : [];
@@ -727,10 +725,18 @@ function attachDashboardListeners(){
     btn.addEventListener("click", ()=>{ activeTab="postes"; postesFormOpen=true; editingItemId=null; posteFormType="depense"; posteFormCat=CATEGORIES_DEPENSE[0]; posteFieldStash={nom:"",montant:"",frequence:"mensuel",dateFin:""}; render(); });
   });
 
-  document.getElementById("year-prev").addEventListener("click", ()=>{ comparatifYear--; render(); });
-  document.getElementById("year-next").addEventListener("click", ()=>{ comparatifYear++; render(); });
+  try{ drawComparatifChart(); }catch(e){ console.error("Erreur graphique comparatif :", e); }
 
-  document.getElementById("actual-save").addEventListener("click", ()=>{
+  const giftBtn = document.getElementById("btn-create-gift-project");
+  if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire"}; activeTab="projets"; projectsFormOpen=true; render(); });
+
+  const yearPrev = document.getElementById("year-prev");
+  const yearNext = document.getElementById("year-next");
+  if(yearPrev) yearPrev.addEventListener("click", ()=>{ comparatifYear--; render(); });
+  if(yearNext) yearNext.addEventListener("click", ()=>{ comparatifYear++; render(); });
+
+  const actualSaveBtn = document.getElementById("actual-save");
+  if(actualSaveBtn) actualSaveBtn.addEventListener("click", ()=>{
     const m = Number(document.getElementById("actual-month").value);
     const rev = document.getElementById("actual-revenu").value;
     const dep = document.getElementById("actual-depense").value;
@@ -1446,7 +1452,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-022</span>
+          <span class="version-tag">V01-023</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
