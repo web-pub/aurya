@@ -15,7 +15,7 @@
 <body>
   <div class="auth-box">
     <div style="text-align:center;margin-bottom:24px;">
-      <a href="index.html"><img id="logo" style="height:56px;" alt="Aurya" /></a>
+      <a href="index.html" style="text-decoration:none;"><img id="logo" style="height:64px;display:block;margin:0 auto;" alt="Aurya" /><p style="font-family:'Fredoka';font-size:12px;font-weight:600;color:var(--royal);margin:4px 0 0;">Chaque euro trouve sa place.</p></a>
     </div>
 
     <div class="card">
@@ -99,8 +99,17 @@ if(!initFirebaseApp()){
   document.getElementById("login-error").style.display = "block";
 } else {
   const auth = firebase.auth();
+  const db = firebase.firestore();
+  async function redirectAfterLogin(user){
+    try{
+      const adminSnap = await db.collection("admins").doc(user.uid).get();
+      window.location.href = adminSnap.exists ? "admin.html" : "app.html";
+    }catch(e){
+      window.location.href = "app.html";
+    }
+  }
   auth.onAuthStateChanged((user)=>{
-    if(user){ window.location.href = "app.html"; }
+    if(user){ redirectAfterLogin(user); }
   });
 
   document.getElementById("login-submit").addEventListener("click", async ()=>{
@@ -111,8 +120,8 @@ if(!initFirebaseApp()){
     const btn = document.getElementById("login-submit");
     btn.disabled = true; btn.textContent = "Connexion...";
     try{
-      await auth.signInWithEmailAndPassword(identifiantToEmail(idVal), pwdVal);
-      window.location.href = "app.html";
+      const cred = await auth.signInWithEmailAndPassword(identifiantToEmail(idVal), pwdVal);
+      await redirectAfterLogin(cred.user);
     }catch(e){
       errEl.textContent = translateAuthError(e.code);
       errEl.style.display = "block";
@@ -120,7 +129,6 @@ if(!initFirebaseApp()){
     }
   });
 
-  const db = firebase.firestore();
   document.getElementById("req-submit").addEventListener("click", async ()=>{
     const nom = document.getElementById("req-nom").value.trim();
     const prenom = document.getElementById("req-prenom").value.trim();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Aurya — Notre histoire</title>
+<title>Aurya — Notre histoire & À propos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css" />
@@ -13,12 +13,25 @@
 </head>
 <body>
   <div id="site-topbar-mount"></div>
-  <div class="wrap" style="max-width:760px;margin:0 auto;padding:24px 16px 60px;">
+  <div class="wrap" style="max-width:960px;margin:0 auto;padding:24px 16px 60px;">
 
-    <h1 class="display" style="font-size:24px;margin-bottom:16px;">✨ L'histoire d'Aurya</h1>
+    <div class="story-grid">
+      <div class="card story-block">
+        <img src="" id="story-logo" alt="Aurya" class="story-visual story-visual-logo" />
+        <h1 class="display" style="font-size:22px;margin:16px 0 14px;">✨ Notre histoire</h1>
+        <div id="histoire-content"><p class="muted-dark">Chargement...</p></div>
+      </div>
 
-    <div class="card" id="histoire-content">
-      <p class="muted-dark" style="text-align:center;">Chargement...</p>
+      <div class="card story-block">
+        <img src="assets/helene-photo.jpg" alt="Hélène Laruelle" class="story-visual story-visual-photo" />
+        <h2 class="display" style="font-size:22px;margin:16px 0 14px;">🙋 À propos de moi</h2>
+        <div id="apropos-content"><p class="muted-dark">Chargement...</p></div>
+      </div>
+    </div>
+
+    <div style="height:16px;"></div>
+    <div class="card" style="text-align:center;">
+      <a href="contact.html" class="btn btn-ghost">✉️ Me contacter</a>
     </div>
 
     <footer class="legal-footer">
@@ -41,6 +54,7 @@
 
 <script>
 document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("histoire");
+document.getElementById("story-logo").src = LOGO_WORDMARK;
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
 
@@ -62,15 +76,31 @@ Chez Aurya, nous pensons que l'éducation financière n'est pas un privilège r�
 
 Notre mission est simple : rendre la gestion du budget accessible à tous, pour que chacun puisse comprendre ses finances, reprendre le contrôle de son avenir, et avancer sereinement vers ses projets de vie. Parce que tout le monde mérite de savoir gérer son argent — pas seulement les comptables, pas seulement les financiers. Tout le monde.`;
 
-function renderHistoire(texte){
-  document.getElementById("histoire-content").innerHTML =
-    texte.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.8;color:var(--muted);margin-bottom:16px;">${p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`).join("");
+const DEFAULT_APROPOS = `Je m'appelle Hélène Laruelle. Je suis comptable de formation, et j'accompagne au quotidien des indépendants et des entreprises dans leur gestion administrative, comptable et RH.
+
+Depuis des années, un constat me frappe : on apprend à lire, à écrire, à compter, on apprend l'histoire, les sciences, le sport — mais personne ne nous apprend vraiment à gérer notre argent. Pourtant, contrairement à beaucoup de ces matières, tout le monde, un jour, devra établir un budget, payer ses factures, épargner pour ses projets et prendre des décisions financières importantes. Ouvrier, enseignant, indépendant, infirmier, employé ou entrepreneur : personne n'y échappe, et presque personne n'y a été préparé.
+
+Ce n'est pas un manque d'intelligence, c'est un manque de transmission. Pour moi, certaines notions paraissent évidentes — mais j'ai vu, dans mon métier, combien de personnes n'ont jamais eu l'occasion d'apprendre les bases.
+
+J'ai voulu mettre ma rigueur de comptable au service de quelque chose de plus accessible : Aurya. Pas pour transformer chacun en expert-comptable, mais pour donner à tous les clés pour comprendre où va son argent, reprendre le contrôle de son budget, et avancer sereinement vers ses projets de vie.
+
+Cette page t'appartient aussi un peu — dis-moi ce que tu aimerais y lire !`;
+
+function renderBloc(elId, texte){
+  document.getElementById(elId).innerHTML =
+    texte.split("\n\n").map(p => `<p style="font-size:13px;line-height:1.75;color:var(--muted);margin-bottom:13px;">${p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`).join("");
 }
 
-renderHistoire(DEFAULT_HISTOIRE);
+renderBloc("histoire-content", DEFAULT_HISTOIRE);
+renderBloc("apropos-content", DEFAULT_APROPOS);
+
 if(initFirebaseApp()){
-  firebase.firestore().collection("siteContent").doc("histoire").get()
-    .then(snap => { if(snap.exists && snap.data().texte) renderHistoire(snap.data().texte); })
+  const db = firebase.firestore();
+  db.collection("siteContent").doc("histoire").get()
+    .then(snap => { if(snap.exists && snap.data().texte) renderBloc("histoire-content", snap.data().texte); })
+    .catch(()=>{});
+  db.collection("siteContent").doc("apropos").get()
+    .then(snap => { if(snap.exists && snap.data().texte) renderBloc("apropos-content", snap.data().texte); })
     .catch(()=>{});
 }
 </script>

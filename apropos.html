@@ -2,68 +2,11 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Aurya — À propos</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css" />
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="assets/aurya-shared.js"></script>
+<meta http-equiv="refresh" content="0; url=histoire.html" />
+<title>Aurya — Redirection</title>
 </head>
 <body>
-  <div id="site-topbar-mount"></div>
-  <div class="wrap" style="max-width:760px;margin:0 auto;padding:24px 16px 60px;">
-
-    <h1 class="display" style="font-size:24px;margin-bottom:16px;">🙋 À propos</h1>
-
-    <div class="card" id="apropos-content">
-      <p class="muted-dark" style="text-align:center;">Chargement...</p>
-    </div>
-
-    <div style="height:20px;"></div>
-    <div class="card" style="text-align:center;">
-      <a href="contact.html" class="btn btn-ghost">✉️ Me contacter</a>
-    </div>
-
-    <footer class="legal-footer">
-      <div class="legal-links">
-        <a href="mentions-legales.html#securisation">Sécurisation</a><span class="sep">|</span>
-        <a href="mentions-legales.html#confidentialite">Déclaration de confidentialité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#ethique">Business Ethics &amp; Governance</a><span class="sep">|</span>
-        <a href="mentions-legales.html#cookies">Politique en matière de cookies</a><span class="sep">|</span>
-        <a href="mentions-legales.html#responsabilite">Limitation de responsabilité</a><span class="sep">|</span>
-        <a href="mentions-legales.html#mentions">Mentions légales / RGPD / CGV</a>
-      </div>
-      <div class="copyright-block">
-        <p>© <span id="year"></span> Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite.</p>
-        <p>Site développé par Hélène Laruelle.</p>
-        <p>Contenu sous la responsabilité de Hélène Laruelle</p>
-      </div>
-    </footer>
-  </div>
-  <div class="hl-badge-wrap" id="hl-badge"></div>
-
-<script>
-document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("apropos");
-document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
-document.getElementById("year").textContent = new Date().getFullYear();
-
-const DEFAULT_APROPOS = `Je m'appelle Hélène Laruelle. J'accompagne au quotidien des indépendants et des entreprises dans leur gestion administrative, comptable et RH — et j'ai voulu mettre cette même rigueur au service d'un outil plus personnel : aider chacun à voir clair dans son budget.
-
-Aurya est né de cette conviction : la gestion financière ne devrait pas être une source de stress, mais un espace de clarté et de sérénité. Cette page t'appartient aussi un peu — dis-moi ce que tu aimerais y lire !`;
-
-function renderApropos(texte){
-  document.getElementById("apropos-content").innerHTML =
-    texte.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.8;color:var(--muted);margin-bottom:16px;">${p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`).join("");
-}
-
-renderApropos(DEFAULT_APROPOS);
-if(initFirebaseApp()){
-  firebase.firestore().collection("siteContent").doc("apropos").get()
-    .then(snap => { if(snap.exists && snap.data().texte) renderApropos(snap.data().texte); })
-    .catch(()=>{});
-}
-</script>
+  <p>Cette page a fusionné avec <a href="histoire.html">Notre histoire</a>.</p>
+  <script>window.location.replace("histoire.html");</script>
 </body>
 </html>

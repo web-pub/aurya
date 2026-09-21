@@ -40,6 +40,7 @@ let comparatifChart = null;
 let appStage = "loading";
 
 let fbAuth = null, fbDb = null, currentUser = null;
+let isUserAlsoAdmin = false;
 function userDocRef(){ return fbDb.collection("auryaUsers").doc(currentUser.uid); }
 
 /* ---------------------------------- STORAGE (Firestore) ---------------------------------- */
@@ -78,6 +79,9 @@ async function loadAll(){
   fbAuth.onAuthStateChanged(async (user) => {
     if(!user){ goToLogin(); return; }
     currentUser = user;
+    fbDb.collection("admins").doc(user.uid).get()
+      .then(snap => { isUserAlsoAdmin = snap.exists; if(appStage==="app") render(); })
+      .catch(()=>{});
     const data = await loadUserDoc();
     if(data && data.profile){
       profile = data.profile; items = data.items||[]; projects = data.projects||[]; actuals = data.actuals||{};
@@ -1202,12 +1206,16 @@ function renderShell(){
     <div class="app-header">
       <div class="brand">
         <img src="${LOGO_WORDMARK}" alt="Aurya" />
+        <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-009</span>
+          <span class="version-tag">V01-012</span>
         </div>
       </div>
-      <a href="index.html" class="home-icon-btn" title="Accueil du site">${ICONS.home}</a>
+      <div style="display:flex;gap:8px;">
+        ${isUserAlsoAdmin? `<a href="admin.html" class="home-icon-btn" title="Espace conseil (admin)">${ICONS.shield}</a>` : ""}
+        <a href="index.html" class="home-icon-btn" title="Accueil du site">${ICONS.home}</a>
+      </div>
     </div>
 
     <div class="admin-tabs" style="margin-top:16px;">

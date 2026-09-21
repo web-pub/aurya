@@ -23,9 +23,7 @@
       </p>
     </div>
 
-    <div class="card" id="conseils-content">
-      <p class="muted-dark" style="text-align:center;">Chargement...</p>
-    </div>
+    <div id="conseils-content"><p class="muted-dark" style="text-align:center;">Chargement...</p></div>
 
     <div style="height:20px;"></div>
     <div class="card" style="text-align:center;">
@@ -56,18 +54,24 @@ document.getElementById("site-topbar-mount").innerHTML = renderSiteTopbar("conse
 document.getElementById("hl-badge").innerHTML = LOGO_HL_BADGE;
 document.getElementById("year").textContent = new Date().getFullYear();
 
-const DEFAULT_CONSEILS = "Aurya te propose ici, au fil du temps, quelques repères généraux pour mieux gérer ton budget : mettre de côté dès que possible, prévoir tes charges annuelles à l'avance, distinguer besoins et envies, et te fixer des objectifs atteignables. Hélène complètera cette page avec des conseils plus détaillés.";
-
-function renderConseils(texte){
-  document.getElementById("conseils-content").innerHTML =
-    texte.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:14px;">${p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`).join("");
-}
-
-renderConseils(DEFAULT_CONSEILS);
 if(initFirebaseApp()){
-  firebase.firestore().collection("siteContent").doc("conseils").get()
-    .then(snap => { if(snap.exists && snap.data().texte) renderConseils(snap.data().texte); })
-    .catch(()=>{});
+  firebase.firestore().collection("conseils").where("statut","==","publie").get()
+    .then(snap => {
+      const el = document.getElementById("conseils-content");
+      if(snap.empty){
+        el.innerHTML = `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Aucun conseil publié pour l'instant.</p></div>`;
+        return;
+      }
+      const items = [];
+      snap.forEach(doc => items.push(doc.data()));
+      items.sort((a,b) => (a.ordre||0) - (b.ordre||0));
+      el.innerHTML = items.map(c => `
+        <div class="card" style="margin-bottom:14px;">
+          <h3 class="display" style="font-size:16px;margin-bottom:8px;">${esc(c.titre||"")}</h3>
+          <p style="font-size:14px;line-height:1.7;color:var(--muted);margin:0;white-space:pre-line;">${esc(c.texte||"")}</p>
+        </div>`).join("");
+    })
+    .catch(()=>{ document.getElementById("conseils-content").innerHTML = `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Impossible de charger les conseils pour l'instant.</p></div>`; });
 }
 </script>
 </body>

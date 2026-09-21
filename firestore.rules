@@ -1,4 +1,4 @@
-// Projet : Aurya — Version V01-009
+// Projet : Aurya — Version V01-012
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -89,6 +89,22 @@ service cloud.firestore {
         && request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() <= 200
         && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 3000;
       allow read, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    // Livre d'or (page publique) : n'importe qui peut proposer un message, seules les
+    // entrées validées par l'admin sont visibles publiquement ; l'admin voit et gère tout.
+    match /livreOr/{entryId} {
+      allow create: if request.resource.data.keys().hasOnly(['prenom','message','statut','creeLe'])
+        && request.resource.data.statut == "nouveau"
+        && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 100
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 500;
+      allow read: if resource.data.statut == "valide" || (request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    // Conseils publiés sur la page publique "Conseils" — gérés un par un depuis l'admin
+    // (ajout, modification, publication, masquage), lecture publique seulement si publié.
+    match /conseils/{conseilId} {
+      allow read: if resource.data.statut == "publie" || (request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow create, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
   }
 }

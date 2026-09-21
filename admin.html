@@ -31,6 +31,9 @@ let creatingFrom = null;      // demande en cours de traitement -> {id, nom, pre
 
 let reservationsList = null;
 let messagesList = null;
+let livreOrList = null;
+let conseilsList = null;
+let editingConseilId = null; // null = pas d'édition en cours, "new" = formulaire d'ajout ouvert
 
 let chatMessages = null;      // conversation du membre sélectionné
 
@@ -88,6 +91,8 @@ function renderShell(){
     {id:"demandes", label:"Demandes"},
     {id:"reservations", label:"Réservations"},
     {id:"messages", label:"Messages"},
+    {id:"livreor", label:"Livre d'or"},
+    {id:"conseils", label:"Conseils"},
     {id:"motsdepasse", label:"Mots de passe"},
     {id:"ajouter", label:"Ajouter un membre"},
     {id:"contenu", label:"Contenu du site"},
@@ -97,6 +102,8 @@ function renderShell(){
   else if(adminTab==="demandes") content = renderDemandes();
   else if(adminTab==="reservations") content = renderReservations();
   else if(adminTab==="messages") content = renderMessages();
+  else if(adminTab==="livreor") content = renderLivreOr();
+  else if(adminTab==="conseils") content = renderConseilsAdmin();
   else if(adminTab==="motsdepasse") content = renderMotsDePasse();
   else if(adminTab==="ajouter") content = renderAjouterMembre();
   else if(adminTab==="contenu") content = renderContenuSite();
@@ -106,12 +113,14 @@ function renderShell(){
     <div class="app-header">
       <div class="brand">
         <img src="${LOGO_WORDMARK}" alt="Aurya" />
+        <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">🛡️ Admin</span>
-          <span class="version-tag">V01-009</span>
+          <span class="version-tag">V01-012</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
+        <a href="app.html" class="home-icon-btn" title="Mon espace membre">${ICONS.user}</a>
         <button class="home-icon-btn" id="btn-logout" title="Se déconnecter">${ICONS.logout}</button>
         <a href="index.html" class="home-icon-btn" title="Accueil du site">${ICONS.home}</a>
       </div>
@@ -153,6 +162,8 @@ function attachShellListeners(){
   if(adminTab==="demandes") attachDemandesListeners();
   if(adminTab==="reservations") attachReservationsListeners();
   if(adminTab==="messages") attachMessagesListeners();
+  if(adminTab==="livreor") attachLivreOrListeners();
+  if(adminTab==="conseils") attachConseilsAdminListeners();
   if(adminTab==="motsdepasse") attachMotsDePasseListeners();
   if(adminTab==="ajouter") attachAjouterMembreListeners();
   if(adminTab==="contenu") attachContenuSiteListeners();
@@ -609,6 +620,208 @@ function attachMessagesListeners(){
   });
 }
 
+/* ---------------------------------- LIVRE D'OR ---------------------------------- */
+async function loadLivreOr(){
+  livreOrList = "loading"; render();
+  try{
+    const snap = await fbDb.collection("livreOr").orderBy("creeLe","desc").get();
+    const list = [];
+    snap.forEach(doc=> list.push({ id: doc.id, ...doc.data() }));
+    livreOrList = list;
+  }catch(e){ console.error(e); livreOrList = []; }
+  render();
+}
+
+function renderLivreOr(){
+  if(livreOrList === null || livreOrList === "loading"){
+    return `<div class="card"><p class="muted-dark" style="text-align:center;">Chargement...</p></div>`;
+  }
+  const nouveaux = livreOrList.filter(e=>e.statut==="nouveau");
+  const valides = livreOrList.filter(e=>e.statut==="valide");
+  return `
+    <h3 class="display" style="font-size:16px;margin-bottom:10px;">À valider (${nouveaux.length})</h3>
+    ${nouveaux.length===0? `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Rien en attente.</p></div>` :
+      nouveaux.map(e=>`
+      <div class="card" style="margin-bottom:10px;">
+        <p style="font-size:14px;margin:0 0 6px;">${esc(e.message)}</p>
+        <p class="muted-dark" style="font-size:12px;margin:0 0 10px;">— ${esc(e.prenom)}</p>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" data-valider-lo="${e.id}">✅ Valider</button>
+          <button class="btn btn-ghost" data-refuser-lo="${e.id}">✖️ Refuser</button>
+        </div>
+      </div>`).join("")}
+
+    <h3 class="display" style="font-size:16px;margin:20px 0 10px;">Publiés (${valides.length})</h3>
+    ${valides.length===0? `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Aucun message publié pour l'instant.</p></div>` :
+      valides.map(e=>`
+      <div class="card" style="margin-bottom:8px;">
+        <div class="between">
+          <div>
+            <p style="font-size:13px;margin:0 0 4px;">${esc(e.message)}</p>
+            <p class="muted-dark" style="font-size:12px;margin:0;">— ${esc(e.prenom)}</p>
+          </div>
+          <button class="icon-btn" data-retirer-lo="${e.id}" title="Retirer de la publication">${ICONS.trash}</button>
+        </div>
+      </div>`).join("")}
+  `;
+}
+function attachLivreOrListeners(){
+  if(livreOrList === null){ loadLivreOr(); return; }
+  document.querySelectorAll("[data-valider-lo]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.validerLo;
+      await fbDb.collection("livreOr").doc(id).update({ statut:"valide" }).catch(()=>{});
+      livreOrList = livreOrList.map(e=> e.id===id? {...e, statut:"valide"} : e);
+      render();
+    });
+  });
+  document.querySelectorAll("[data-refuser-lo]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.refuserLo;
+      await fbDb.collection("livreOr").doc(id).delete().catch(()=>{});
+      livreOrList = livreOrList.filter(e=> e.id!==id);
+      render();
+    });
+  });
+  document.querySelectorAll("[data-retirer-lo]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.retirerLo;
+      if(!confirm("Retirer définitivement ce message publié ?")) return;
+      await fbDb.collection("livreOr").doc(id).delete().catch(()=>{});
+      livreOrList = livreOrList.filter(e=> e.id!==id);
+      render();
+    });
+  });
+}
+
+/* ---------------------------------- CONSEILS (page publique) ---------------------------------- */
+const CONSEILS_SEED = [
+  {titre:"1. Épargne dès que tu touches ton salaire", texte:"Ne mets pas de côté \"ce qu'il reste\" à la fin du mois — c'est le meilleur moyen de ne jamais rien épargner. Vire un montant fixe vers ton épargne dès que ton salaire arrive, même modeste. Tu t'habitues à vivre avec le reste, et l'épargne devient automatique plutôt qu'une intention."},
+  {titre:"2. Établis un budget mensuel réaliste", texte:"Liste tes revenus fixes et toutes tes charges (loyer ou crédit, énergie, assurances, alimentation, transport...). Tu sauras exactement combien il te reste réellement à dépenser chaque mois, sans mauvaise surprise."},
+  {titre:"3. Prévois un fonds d'urgence", texte:"Vise l'équivalent de 3 à 6 mois de dépenses de côté, séparément de ton épargne \"projets\". C'est ce qui t'évite de t'endetter au premier imprévu (voiture, santé, réparation)."},
+  {titre:"4. Mensualise tes charges annuelles", texte:"Assurances, taxes, entretien de la chaudière... Plutôt que de subir une grosse facture une fois par an, divise-la par 12 et mets ce montant de côté chaque mois. C'est exactement ce qu'Aurya fait pour toi automatiquement."},
+  {titre:"5. Distingue besoins et envies", texte:"Avant un achat, demande-toi s'il s'agit d'un besoin ou d'une envie — les deux ont leur place, mais pas dans les mêmes proportions. Et fais le tri une à deux fois par an dans tes abonnements : beaucoup finissent oubliés alors qu'ils continuent d'être prélevés."},
+];
+
+async function loadConseilsAdmin(){
+  conseilsList = "loading"; render();
+  try{
+    const snap = await fbDb.collection("conseils").get();
+    const list = [];
+    snap.forEach(doc=> list.push({ id: doc.id, ...doc.data() }));
+    list.sort((a,b)=> (a.ordre||0)-(b.ordre||0));
+    conseilsList = list;
+  }catch(e){ console.error(e); conseilsList = []; }
+  render();
+}
+
+function renderConseilsAdmin(){
+  if(conseilsList === null || conseilsList === "loading"){
+    return `<div class="card"><p class="muted-dark" style="text-align:center;">Chargement...</p></div>`;
+  }
+  const formCard = (c, idPrefix) => `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="field"><span>Titre</span><input id="${idPrefix}-titre" value="${esc(c.titre||'')}" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Texte</span><textarea id="${idPrefix}-texte" rows="4" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(c.texte||'')}</textarea></div>
+      <div style="height:12px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" data-save-conseil="${idPrefix}">💾 Enregistrer</button>
+        <button class="btn btn-ghost" data-cancel-conseil>Annuler</button>
+      </div>
+    </div>`;
+
+  const addBtn = editingConseilId==="new" ? formCard({titre:"",texte:""}, "new") :
+    `<button class="btn btn-primary" id="btn-nouveau-conseil" style="margin-bottom:16px;">➕ Ajouter un conseil</button>`;
+
+  const seedBtn = conseilsList.length===0 ? `<button class="btn btn-ghost" id="btn-seed-conseils" style="margin-bottom:16px;margin-left:8px;">✨ Charger les 5 conseils de base</button>` : "";
+
+  const items = conseilsList.map(c=>{
+    if(editingConseilId===c.id) return formCard(c, c.id);
+    const publie = c.statut === "publie";
+    return `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="between">
+        <div>
+          <strong style="font-size:14px;">${esc(c.titre||'')}</strong>
+          <span class="${publie?'consent-yes':'consent-no'}" style="font-size:11px;margin-left:8px;">${publie? '✅ Publié':'🔒 Masqué'}</span>
+          <p class="muted-dark" style="font-size:12px;margin:6px 0 0;max-width:520px;">${esc((c.texte||'').slice(0,140))}${(c.texte||'').length>140?'…':''}</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-edit-conseil="${c.id}">✏️ Modifier</button>
+        <button class="btn btn-ghost" data-toggle-conseil="${c.id}">${publie? '🙈 Masquer':'📢 Publier'}</button>
+        <button class="btn btn-ghost" data-delete-conseil="${c.id}">🗑️ Supprimer</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `${addBtn}${seedBtn}${items || `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Aucun conseil pour l'instant.</p></div>`}`;
+}
+
+function attachConseilsAdminListeners(){
+  if(conseilsList === null){ loadConseilsAdmin(); return; }
+
+  const seedBtn = document.getElementById("btn-seed-conseils");
+  if(seedBtn) seedBtn.addEventListener("click", async ()=>{
+    seedBtn.disabled = true; seedBtn.textContent = "Chargement...";
+    const batch = fbDb.batch();
+    CONSEILS_SEED.forEach((c, i)=>{
+      const ref = fbDb.collection("conseils").doc();
+      batch.set(ref, { titre:c.titre, texte:c.texte, statut:"publie", ordre:i, creeLe:new Date().toISOString() });
+    });
+    await batch.commit().catch(()=>{});
+    conseilsList = null;
+    loadConseilsAdmin();
+  });
+
+  const newBtn = document.getElementById("btn-nouveau-conseil");
+  if(newBtn) newBtn.addEventListener("click", ()=>{ editingConseilId = "new"; render(); });
+
+  document.querySelectorAll("[data-edit-conseil]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ editingConseilId = btn.dataset.editConseil; render(); });
+  });
+  document.querySelectorAll("[data-cancel-conseil]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ editingConseilId = null; render(); });
+  });
+  document.querySelectorAll("[data-save-conseil]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const prefix = btn.dataset.saveConseil;
+      const titre = document.getElementById(`${prefix}-titre`).value.trim();
+      const texte = document.getElementById(`${prefix}-texte`).value.trim();
+      if(!titre || !texte) return;
+      if(prefix === "new"){
+        const ordre = conseilsList.length;
+        await fbDb.collection("conseils").add({ titre, texte, statut:"publie", ordre, creeLe:new Date().toISOString() }).catch(()=>{});
+      } else {
+        await fbDb.collection("conseils").doc(prefix).update({ titre, texte }).catch(()=>{});
+      }
+      editingConseilId = null;
+      conseilsList = null;
+      loadConseilsAdmin();
+    });
+  });
+  document.querySelectorAll("[data-toggle-conseil]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.toggleConseil;
+      const c = conseilsList.find(x=>x.id===id);
+      const nouveauStatut = c.statut==="publie" ? "masque" : "publie";
+      await fbDb.collection("conseils").doc(id).update({ statut: nouveauStatut }).catch(()=>{});
+      conseilsList = conseilsList.map(x=> x.id===id? {...x, statut:nouveauStatut} : x);
+      render();
+    });
+  });
+  document.querySelectorAll("[data-delete-conseil]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.deleteConseil;
+      if(!confirm("Supprimer définitivement ce conseil ?")) return;
+      await fbDb.collection("conseils").doc(id).delete().catch(()=>{});
+      conseilsList = conseilsList.filter(x=> x.id!==id);
+      render();
+    });
+  });
+}
+
 /* ---------------------------------- MOTS DE PASSE ---------------------------------- */
 function renderMotsDePasse(){
   if(membersList === null || membersList === "loading"){
@@ -752,10 +965,16 @@ Mais il y a une autre raison, plus personnelle, à la naissance d'Aurya. On appr
 Chez Aurya, nous pensons que l'éducation financière n'est pas un privilège réservé aux experts-comptables ou aux financiers. C'est une compétence essentielle de la vie quotidienne, au même titre que lire ou écrire.
 
 Notre mission est simple : rendre la gestion du budget accessible à tous, pour que chacun puisse comprendre ses finances, reprendre le contrôle de son avenir, et avancer sereinement vers ses projets de vie. Parce que tout le monde mérite de savoir gérer son argent — pas seulement les comptables, pas seulement les financiers. Tout le monde.`;
-const DEFAULT_APROPOS_ADMIN = `Je m'appelle Hélène Laruelle. J'accompagne au quotidien des indépendants et des entreprises dans leur gestion administrative, comptable et RH — et j'ai voulu mettre cette même rigueur au service d'un outil plus personnel : aider chacun à voir clair dans son budget.
+const DEFAULT_APROPOS_ADMIN = `Je m'appelle Hélène Laruelle. Je suis comptable de formation, et j'accompagne au quotidien des indépendants et des entreprises dans leur gestion administrative, comptable et RH.
 
-Aurya est né de cette conviction : la gestion financière ne devrait pas être une source de stress, mais un espace de clarté et de sérénité. Cette page t'appartient aussi un peu — dis-moi ce que tu aimerais y lire !`;
-const DEFAULT_CONSEILS_ADMIN = "Aurya te propose ici, au fil du temps, quelques repères généraux pour mieux gérer ton budget : mettre de côté dès que possible, prévoir tes charges annuelles à l'avance, distinguer besoins et envies, et te fixer des objectifs atteignables. Hélène complètera cette page avec des conseils plus détaillés.";
+Depuis des années, un constat me frappe : on apprend à lire, à écrire, à compter, on apprend l'histoire, les sciences, le sport — mais personne ne nous apprend vraiment à gérer notre argent. Pourtant, contrairement à beaucoup de ces matières, tout le monde, un jour, devra établir un budget, payer ses factures, épargner pour ses projets et prendre des décisions financières importantes. Ouvrier, enseignant, indépendant, infirmier, employé ou entrepreneur : personne n'y échappe, et presque personne n'y a été préparé.
+
+Ce n'est pas un manque d'intelligence, c'est un manque de transmission. Pour moi, certaines notions paraissent évidentes — mais j'ai vu, dans mon métier, combien de personnes n'ont jamais eu l'occasion d'apprendre les bases.
+
+J'ai voulu mettre ma rigueur de comptable au service de quelque chose de plus accessible : Aurya. Pas pour transformer chacun en expert-comptable, mais pour donner à tous les clés pour comprendre où va son argent, reprendre le contrôle de son budget, et avancer sereinement vers ses projets de vie.
+
+Cette page t'appartient aussi un peu — dis-moi ce que tu aimerais y lire !`;
+
 const DEFAULT_ROI_ADMIN = `En utilisant Aurya, tu acceptes le présent règlement d'ordre intérieur.
 
 1. Aurya est un outil personnel de suivi budgétaire. Les données que tu encodes (revenus, dépenses, projets d'épargne) restent ta propriété et te sont strictement personnelles.
@@ -774,21 +993,19 @@ let extraTexts = null; // { histoire, apropos, conseils, roi }
 async function loadSiteContent(){
   siteContent = "loading"; render();
   try{
-    const [publicSnap, histSnap, aproposSnap, conseilsSnap, roiSnap] = await Promise.all([
+    const [publicSnap, histSnap, aproposSnap, roiSnap] = await Promise.all([
       fbDb.collection("siteContent").doc("public").get(),
       fbDb.collection("siteContent").doc("histoire").get(),
       fbDb.collection("siteContent").doc("apropos").get(),
-      fbDb.collection("siteContent").doc("conseils").get(),
       fbDb.collection("siteContent").doc("roi").get(),
     ]);
     siteContent = { ...DEFAULT_SITE_CONTENT, ...(publicSnap.exists ? publicSnap.data() : {}) };
     extraTexts = {
       histoire: (histSnap.exists && histSnap.data().texte) ? histSnap.data().texte : DEFAULT_HISTOIRE_ADMIN,
       apropos: (aproposSnap.exists && aproposSnap.data().texte) ? aproposSnap.data().texte : DEFAULT_APROPOS_ADMIN,
-      conseils: (conseilsSnap.exists && conseilsSnap.data().texte) ? conseilsSnap.data().texte : DEFAULT_CONSEILS_ADMIN,
       roi: (roiSnap.exists && roiSnap.data().texte) ? roiSnap.data().texte : DEFAULT_ROI_ADMIN,
     };
-  }catch(e){ console.error(e); siteContent = { ...DEFAULT_SITE_CONTENT }; extraTexts = { histoire: DEFAULT_HISTOIRE_ADMIN, apropos: DEFAULT_APROPOS_ADMIN, conseils: DEFAULT_CONSEILS_ADMIN, roi: DEFAULT_ROI_ADMIN }; }
+  }catch(e){ console.error(e); siteContent = { ...DEFAULT_SITE_CONTENT }; extraTexts = { histoire: DEFAULT_HISTOIRE_ADMIN, apropos: DEFAULT_APROPOS_ADMIN, roi: DEFAULT_ROI_ADMIN }; }
   render();
 }
 
@@ -798,7 +1015,7 @@ function renderContenuSite(){
   }
   const c = siteContent;
   return `
-    <p class="muted" style="font-size:14px;margin-bottom:16px;">Ce texte est celui affiché sur les pages publiques du site (Accueil, Notre histoire, À propos, Conseils, ROI). Toute modification est visible immédiatement, sans toucher au code.</p>
+    <p class="muted" style="font-size:14px;margin-bottom:16px;">Ce texte est celui affiché sur les pages publiques du site (Accueil, et les deux blocs de la page "Notre histoire" : histoire d'Aurya + à propos de toi). Le règlement (ROI) se gère aussi ici. Les conseils, eux, ont leur propre onglet juste à côté. Toute modification est visible immédiatement, sans toucher au code.</p>
 
     <div class="card" style="margin-bottom:16px;">
       <h3 class="display" style="font-size:16px;margin-bottom:10px;">Message principal</h3>
@@ -828,10 +1045,7 @@ function renderContenuSite(){
       <textarea id="c-apropos" rows="6" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(extraTexts.apropos)}</textarea>
     </div>
 
-    <div class="card" style="margin-bottom:16px;">
-      <h3 class="display" style="font-size:16px;margin-bottom:6px;">💡 Page "Conseils"</h3>
-      <textarea id="c-conseils" rows="6" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;">${esc(extraTexts.conseils)}</textarea>
-    </div>
+    <p class="muted-dark" style="font-size:12px;margin-bottom:16px;">💡 La page "Conseils" se gère maintenant depuis son propre onglet, conseil par conseil.</p>
 
     <div class="card" style="margin-bottom:16px;">
       <h3 class="display" style="font-size:16px;margin-bottom:6px;">📋 Règlement d'ordre intérieur (ROI)</h3>
@@ -866,17 +1080,15 @@ function attachContenuSiteListeners(){
     try{
       const histoire = document.getElementById("c-histoire").value.trim() || DEFAULT_HISTOIRE_ADMIN;
       const apropos = document.getElementById("c-apropos").value.trim() || DEFAULT_APROPOS_ADMIN;
-      const conseils = document.getElementById("c-conseils").value.trim() || DEFAULT_CONSEILS_ADMIN;
       const roi = document.getElementById("c-roi").value.trim() || DEFAULT_ROI_ADMIN;
       await Promise.all([
         fbDb.collection("siteContent").doc("public").set(updated, { merge:true }),
         fbDb.collection("siteContent").doc("histoire").set({ texte: histoire }, { merge:true }),
         fbDb.collection("siteContent").doc("apropos").set({ texte: apropos }, { merge:true }),
-        fbDb.collection("siteContent").doc("conseils").set({ texte: conseils }, { merge:true }),
         fbDb.collection("siteContent").doc("roi").set({ texte: roi }, { merge:true }),
       ]);
       siteContent = updated;
-      extraTexts = { histoire, apropos, conseils, roi };
+      extraTexts = { ...extraTexts, histoire, apropos, roi };
       feedback.textContent = "✅ Contenu publié sur le site.";
       feedback.style.color = "var(--green)"; feedback.style.display = "block";
     }catch(e){
