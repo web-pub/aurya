@@ -1,4 +1,4 @@
-// Projet : Aurya — Version V01-020
+// Projet : Aurya — Version V01-022
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -13,10 +13,13 @@ service cloud.firestore {
       allow create: if request.auth != null && (request.auth.uid == userId || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
 
       // Modification : le membre lui-même à tout moment,
-      // ou l'admin uniquement si le membre a coché la case d'autorisation
+      // ou l'admin si le membre a coché la case d'autorisation,
+      // ou l'admin dans tous les cas pour archiver/désarchiver uniquement (gestion de compte,
+      // ne touche à aucune donnée financière donc pas besoin du consentement)
       allow update: if request.auth != null && (
         request.auth.uid == userId ||
-        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && resource.data.profile.consentementAdmin == true)
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && resource.data.profile.consentementAdmin == true) ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived']))
       );
 
       allow delete: if false;

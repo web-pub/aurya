@@ -117,15 +117,17 @@ const DEFAULT_ROI = `En utilisant Aurya, tu acceptes le présent règlement d'or
 
 1. Aurya est un outil personnel de suivi budgétaire. Les données que tu encodes (revenus, dépenses, projets d'épargne) restent ta propriété et te sont strictement personnelles.
 
-2. Si tu autorises Hélène à consulter tes données pour te conseiller, elle s'engage à en faire un usage confidentiel, uniquement dans le but de t'accompagner.
+2. Si tu renseignes des informations concernant tes enfants (prénom, date de naissance, niveau d'étude), tu le fais en tant que représentant légal, dans le seul but de personnaliser les conseils qui te sont donnés. Ces données bénéficient de la même confidentialité que le reste de ton profil et ne sont jamais utilisées à d'autres fins.
 
-3. Les conseils donnés par Hélène, que ce soit via le chat, un rendez-vous ou la page Conseils, sont donnés à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat). Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements.
+3. Si tu autorises Hélène à consulter tes données pour te conseiller, elle s'engage à en faire un usage confidentiel, uniquement dans le but de t'accompagner.
 
-4. Chaque personne reste seule responsable des décisions financières qu'elle prend, y compris sur base des échanges avec Hélène. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation d'Aurya ou de ses conseils.
+4. Les conseils donnés par Hélène, que ce soit via le chat, un rendez-vous ou la page Conseils, sont donnés à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat). Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements.
 
-5. Ton mot de passe doit être renouvelé tous les 3 mois pour la sécurité de tes données.
+5. Chaque personne reste seule responsable des décisions financières qu'elle prend, y compris sur base des échanges avec Hélène. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation d'Aurya ou de ses conseils.
 
-6. Hélène se réserve le droit de suspendre un accès en cas d'usage abusif du service.`;
+6. Ton mot de passe doit être renouvelé tous les 3 mois pour la sécurité de tes données.
+
+7. Hélène se réserve le droit de suspendre un accès en cas d'usage abusif du service.`;
 
 let roiText = null;
 async function loadRoiText(){
@@ -390,7 +392,7 @@ function computeTotals(srcItems, srcProjects){
    revenus/dépenses : seuils au-delà desquels une catégorie mérite attention. */
 const RATIO_RULES = {
   "Logement": { orange: 0.33, rouge: 0.40 },
-  "Crédits / dettes": { orange: 0.20, rouge: 0.30 },
+  "Crédits / dettes": { orange: 0.30, rouge: 0.40 },
 };
 function ratioStatus(pct, rule){
   if(!rule) return null;
@@ -398,6 +400,21 @@ function ratioStatus(pct, rule){
   if(pct > rule.orange) return "orange";
   return "vert";
 }
+const RATIO_ADVICE = {
+  "Logement": {
+    orange: "Ça laisse moins de marge pour les imprévus. Vérifie si un ajustement est possible (renégociation du crédit, colocation, ou simplement à garder à l'œil).",
+    rouge: "À ce niveau, le logement peut mettre le reste du budget sous tension. Pistes possibles : renégocier le crédit ou le bail, ou en discuter avec Hélène pour explorer les options.",
+  },
+  "Crédits / dettes": {
+    orange: "Tes crédits commencent à peser. Évite d'ajouter un nouvel emprunt pour l'instant, et priorise le remboursement du crédit au taux le plus élevé.",
+    rouge: "À ce niveau, un imprévu peut vite devenir compliqué à absorber. Pistes possibles : regrouper tes crédits pour réduire la mensualité, éviter tout nouvel emprunt, ou en parler à Hélène pour alléger la charge.",
+  },
+};
+const RATIO_ADVICE_TOTAL = {
+  orange: "Il te reste peu de marge chaque mois. Repère 1 ou 2 postes à ajuster, même légèrement — ça fait déjà une vraie différence.",
+  rouge: "Tes dépenses prévues dépassent presque tes revenus (ou davantage). Pas de panique : commence par repérer ce qui peut être ajusté, et n'hésite pas à en discuter avec Hélène pour construire un plan progressif.",
+};
+
 function renderAnalyseRatios(){
   const { prevRevenu, prevDepenseTotal } = computeTotals();
   if(prevRevenu <= 0) return "";
@@ -431,18 +448,63 @@ function renderAnalyseRatios(){
       <span style="font-size:14px;font-weight:600;">Dépenses totales / revenus</span>
       <span style="font-weight:700;color:${statusColor[totalStatus]};">${Math.round(pctTotal*100)}%${pill(totalStatus)}</span>
     </div>
-    <div class="progress-track" style="margin:8px 0 18px;"><div class="progress-fill" style="width:${Math.min(pctTotal*100,100)}%;background:${statusColor[totalStatus]};"></div></div>
+    <div class="progress-track" style="margin:8px 0 8px;"><div class="progress-fill" style="width:${Math.min(pctTotal*100,100)}%;background:${statusColor[totalStatus]};"></div></div>
+    ${totalStatus!=='vert'? `<p style="font-size:12px;color:var(--muted);background:${statusColor[totalStatus]}14;border-radius:10px;padding:8px 10px;margin-bottom:10px;">${RATIO_ADVICE_TOTAL[totalStatus]}</p>` : ""}
+    <div style="height:8px;"></div>
 
     ${rows.map(r=>`
-      <div class="between" style="margin-bottom:10px;">
+      <div class="between" style="margin-bottom:${r.status && r.status!=='vert' && RATIO_ADVICE[r.cat]? '4px':'10px'};">
         <span style="font-size:13px;">${esc(r.cat)}</span>
         <span style="font-size:13px;white-space:nowrap;">
           <span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${Math.round(r.pct*100)}%${pill(r.status)}
         </span>
-      </div>`).join("")}
+      </div>
+      ${r.status && r.status!=='vert' && RATIO_ADVICE[r.cat] ? `<p style="font-size:12px;color:var(--muted);background:${statusColor[r.status]}14;border-radius:10px;padding:8px 10px;margin-bottom:10px;">${RATIO_ADVICE[r.cat][r.status]}</p>` : ""}`).join("")}
 
     <p class="muted-dark" style="font-size:11px;margin-top:14px;border-top:1px solid var(--card-lighter);padding-top:10px;">Repères indicatifs et généraux, pas un conseil personnalisé : logement au-delà de 33% des revenus, ou crédits &amp; dettes au-delà de 20-30%, sont des seuils souvent cités comme méritant attention.</p>
   </div>`;
+}
+
+/* Alertes de postes probablement manquants — jamais des reproches, juste une question :
+   "tu confirmes que ce n'est pas un oubli ?". Le membre peut balayer chaque alerte,
+   elle ne revient plus (stockée dans profile.alertesIgnorees). */
+const ALERTES_MANQUANTES = [
+  {
+    id: "enfants-sans-frais",
+    condition: (p, its) => p.aEnfants && !its.some(i=>i.type==="depense" && i.categorie==="Enfants"),
+    message: "Tu as indiqué avoir des enfants, mais aucun poste \"Enfants\" (frais scolaires, activités...) n'est encodé. Un oubli ?",
+  },
+  {
+    id: "pas-assurance",
+    condition: (p, its) => !its.some(i=>i.type==="depense" && i.categorie==="Assurances"),
+    message: "Aucune assurance encodée pour l'instant. Ce serait dommage de ne pas être couvert(e) — vérifie que ce n'est pas un oubli.",
+  },
+  {
+    id: "voiture-sans-carburant",
+    condition: (p, its) => {
+      const transport = its.filter(i=>i.type==="depense" && i.categorie==="Transport");
+      if(transport.length===0) return false;
+      const aVoiture = its.some(i=>/voiture|auto|véhicule/i.test(i.nom));
+      const aCarburant = transport.some(i=>/carburant|essence|diesel/i.test(i.nom));
+      return aVoiture && !aCarburant;
+    },
+    message: "Tu sembles avoir une voiture, mais pas de poste \"carburant\" dans tes dépenses. Une simple omission ?",
+  },
+];
+function renderAlertesManquantes(){
+  const ignorees = Array.isArray(profile.alertesIgnorees) ? profile.alertesIgnorees : [];
+  const actives = ALERTES_MANQUANTES.filter(a => !ignorees.includes(a.id) && a.condition(profile, items));
+  if(actives.length===0) return "";
+  return actives.map(a => `
+    <div class="card dashed" style="margin-bottom:12px;">
+      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:12px;">
+        <p style="font-size:13px;color:var(--muted);margin:0;flex:1;">${a.message}</p>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn btn-ghost" data-goto-postes="1">Ajouter le poste</button>
+        <button class="btn btn-ghost" data-dismiss-alerte="${a.id}">C'est normal, pas d'oubli</button>
+      </div>
+    </div>`).join("");
 }
 
 function renderDashboard(){
@@ -524,6 +586,7 @@ function renderDashboard(){
     </div>
     ${birthdayBlock}
     ${pwdReminderBlock}
+    ${renderAlertesManquantes()}
     <div class="grid3">
       <div class="card">
         <div class="row" style="color:var(--green);margin-bottom:4px;font-size:12px;font-weight:700;">REVENUS PRÉVUS / MOIS</div>
@@ -651,6 +714,19 @@ function attachDashboardListeners(){
   const giftBtn = document.getElementById("btn-create-gift-project");
   if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire"}; activeTab="projets"; projectsFormOpen=true; render(); });
 
+  document.querySelectorAll("[data-dismiss-alerte]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const ignorees = Array.isArray(profile.alertesIgnorees) ? [...profile.alertesIgnorees] : [];
+      ignorees.push(btn.dataset.dismissAlerte);
+      profile = { ...profile, alertesIgnorees: ignorees };
+      saveProfile();
+      render();
+    });
+  });
+  document.querySelectorAll("[data-goto-postes]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ activeTab="postes"; postesFormOpen=true; editingItemId=null; posteFormType="depense"; posteFormCat=CATEGORIES_DEPENSE[0]; posteFieldStash={nom:"",montant:"",frequence:"mensuel",dateFin:""}; render(); });
+  });
+
   document.getElementById("year-prev").addEventListener("click", ()=>{ comparatifYear--; render(); });
   document.getElementById("year-next").addEventListener("click", ()=>{ comparatifYear++; render(); });
 
@@ -706,9 +782,10 @@ function renderPostes(){
       <div style="height:12px;"></div>
       <div class="field"><span>Date de fin (optionnel — ex : fin de crédit)</span><input id="poste-date-fin" type="date" value="${esc(posteFieldStash.dateFin||'')}" /></div>
       <p class="muted-dark" style="font-size:12px;margin-top:6px;">Laisse vide si ce poste est permanent. Une fois cette date passée, il ne comptera plus dans tes totaux.</p>
+      ${!editingItemId? `<p class="muted-dark" style="font-size:12px;margin-top:4px;">Le formulaire reste ouvert après chaque ajout, pour enchaîner plusieurs postes sans redescendre.</p>` : ""}
       <div class="form-actions">
-        <button class="btn btn-primary" id="poste-save">${editingItemId? "Enregistrer les modifications" : "Enregistrer"}</button>
-        <button class="btn btn-ghost" id="poste-cancel">Annuler</button>
+        <button class="btn btn-primary" id="poste-save">${editingItemId? "Enregistrer les modifications" : "Ajouter ce poste"}</button>
+        <button class="btn btn-ghost" id="poste-cancel">${editingItemId? "Annuler" : "Terminer"}</button>
       </div>
     </div>` : ""}
 
@@ -835,6 +912,7 @@ function attachPostesListeners(){
       const montant = document.getElementById("poste-montant").value;
       if(!nom || !montant) return;
       const dateFin = document.getElementById("poste-date-fin").value;
+      const wasEditing = !!editingItemId;
       if(editingItemId){
         items = items.map(i => i.id===editingItemId ? {
           ...i, type: posteFormType, nom,
@@ -853,9 +931,19 @@ function attachPostesListeners(){
         });
       }
       saveItems();
-      postesFormOpen=false;
-      editingItemId=null;
+      if(wasEditing){
+        // Une modification se referme : c'était une correction ponctuelle.
+        postesFormOpen=false;
+        editingItemId=null;
+      } else {
+        // Un ajout laisse le formulaire ouvert, vidé, pour enchaîner sans redescendre.
+        posteFieldStash = { nom:"", montant:"", frequence: document.getElementById("poste-freq").value, dateFin:"" };
+      }
       render();
+      if(!wasEditing){
+        const nomEl = document.getElementById("poste-nom");
+        if(nomEl) nomEl.focus();
+      }
     });
     document.getElementById("poste-cancel").addEventListener("click", ()=>{ postesFormOpen=false; editingItemId=null; render(); });
   }
@@ -1358,7 +1446,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-020</span>
+          <span class="version-tag">V01-022</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">

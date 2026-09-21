@@ -22,12 +22,14 @@ let fbAuth = null, fbDb = null, currentUser = null, isAdmin = false;
 let appStage = "loading"; // loading | denied | app
 let adminTab = "membres"; // membres | demandes | motsdepasse | ajouter
 
-let membersList = null;       // [{uid, profile, items, projects, actuals}]
+let membersList = null;       // [{uid, profile, items, projects, actuals, archived}]
 let selectedMember = null;    // membre sélectionné pour le détail
 let editingProfile = false;
+let showArchivedMembers = false;
 
 let demandesList = null;
 let creatingFrom = null;      // demande en cours de traitement -> {id, nom, prenom, email, gsm}
+let demandeExpandedId = null; // demande traitée actuellement dépliée pour revoir ses infos
 
 let reservationsList = null;
 let messagesList = null;
@@ -116,7 +118,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">Admin</span>
-          <span class="version-tag">V01-020</span>
+          <span class="version-tag">V01-022</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -170,7 +172,7 @@ async function loadMembers(){
     const list = [];
     snap.forEach(doc=>{
       const d = doc.data();
-      list.push({ uid: doc.id, profile:d.profile||{}, items:d.items||[], projects:d.projects||[], actuals:d.actuals||{} });
+      list.push({ uid: doc.id, profile:d.profile||{}, items:d.items||[], projects:d.projects||[], actuals:d.actuals||{}, archived: !!d.archived });
     });
     membersList = list;
   }catch(e){ console.error(e); membersList = []; }
@@ -191,7 +193,7 @@ function renderAnniversairesBlock(){
     if(bi && bi.daysUntil<=30) upcoming.push({ nom:m.profile.prenom||"(sans prénom)", type:"membre", daysUntil:bi.daysUntil, age:bi.nextAge });
     (Array.isArray(m.profile.enfants)?m.profile.enfants:[]).forEach((e,idx)=>{
       const bie = birthdayInfo(e.naissance);
-      if(bie && bie.daysUntil<=30) upcoming.push({ nom:`Enfant de ${m.profile.prenom||"?"}`, type:"enfant", daysUntil:bie.daysUntil, age:bie.nextAge });
+      if(bie && bie.daysUntil<=30) upcoming.push({ nom:e.prenom? e.prenom : `Enfant de ${m.profile.prenom||"?"}`, type:"enfant", daysUntil:bie.daysUntil, age:bie.nextAge });
     });
   });
   if(upcoming.length===0) return "";
@@ -215,13 +217,22 @@ function renderMembres(){
   if(membersList.length === 0){
     return `<div class="card"><p class="muted-dark" style="text-align:center;">Aucun membre pour l'instant. Va dans « Ajouter un membre ».</p></div>`;
   }
-  return renderAnniversairesBlock() + membersList.map(m=>{
+  const archives = membersList.filter(m=>m.archived);
+  const actifs = membersList.filter(m=>!m.archived);
+  const visibles = showArchivedMembers ? membersList : actifs;
+
+  const toggleRow = `
+    <div class="row" style="justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-ghost" id="btn-toggle-archived" style="font-size:12px;padding:6px 12px;">${showArchivedMembers? 'Masquer les archivés' : `Voir aussi les membres archivés (${archives.length})`}</button>
+    </div>`;
+
+  return renderAnniversairesBlock() + (archives.length>0? toggleRow : "") + visibles.map(m=>{
     const t = computeTotalsFor(m.items, m.projects);
     const consent = m.profile.consentementAdmin;
     return `
-    <div class="member-row" data-select-member="${m.uid}">
+    <div class="member-row" data-select-member="${m.uid}" style="${m.archived?'opacity:.55;':''}">
       <div>
-        <strong>${esc(m.profile.prenom||"(sans prénom)")}</strong>
+        <strong>${esc(m.profile.prenom||"(sans prénom)")}</strong>${m.archived? ' <span class="muted-dark">(archivé)</span>' : ''}
         <span class="muted-dark" style="font-size:12px;margin-left:8px;">${esc(m.profile.email||"")}</span>
         <p class="muted-dark" style="font-size:11px;margin:2px 0 0;">${formatDerniereConnexion(m.profile.derniereConnexion)}</p>
       </div>
@@ -246,6 +257,7 @@ function renderMemberDetail(m){
   const canEdit = !!m.profile.consentementAdmin;
   return `
     <button class="btn btn-ghost" id="btn-back-members" style="margin-bottom:16px;">← Retour à la liste</button>
+    <button class="btn btn-ghost" id="btn-toggle-archive-member" style="margin-bottom:16px;margin-left:8px;">${m.archived? 'Désarchiver ce membre' : 'Archiver ce membre'}</button>
 
     <div class="card" style="background:linear-gradient(135deg, var(--card-light), var(--card));margin-bottom:16px;">
       <h2 class="display" style="font-size:20px;">${esc(m.profile.prenom||"(sans prénom)")}</h2>
@@ -258,7 +270,7 @@ function renderMemberDetail(m){
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
         ${m.profile.enfants.map(e=>{
           const bi = birthdayInfo(e.naissance);
-          return `<span class="pill" style="background:var(--bg-deep);color:var(--muted);border:1px solid var(--card-lighter);">${bi? bi.age+' ans':'âge ?'} · ${esc(e.niveauEtude||'')}</span>`;
+          return `<span class="pill" style="background:var(--bg-deep);color:var(--muted);border:1px solid var(--card-lighter);">${e.prenom? esc(e.prenom)+' · ':''}${bi? bi.age+' ans':'âge ?'} · ${esc(e.niveauEtude||'')}</span>`;
         }).join("")}
       </div>` : ""}
       <p style="margin-top:10px;">
@@ -348,6 +360,13 @@ async function loadMemberChat(uid){
 function attachMembresListeners(){
   if(selectedMember){
     document.getElementById("btn-back-members").addEventListener("click", ()=>{ selectedMember=null; chatMessages=null; render(); });
+    document.getElementById("btn-toggle-archive-member").addEventListener("click", async ()=>{
+      const nouveauStatut = !selectedMember.archived;
+      await fbDb.collection("auryaUsers").doc(selectedMember.uid).update({ archived: nouveauStatut }).catch(e=>console.error(e));
+      selectedMember = { ...selectedMember, archived: nouveauStatut };
+      membersList = membersList.map(m=> m.uid===selectedMember.uid? {...m, archived: nouveauStatut} : m);
+      render();
+    });
 
     if(chatMessages === null) loadMemberChat(selectedMember.uid);
     const threadEl = document.getElementById("chat-thread");
@@ -410,6 +429,8 @@ function attachMembresListeners(){
       render();
     });
   });
+  const toggleArchived = document.getElementById("btn-toggle-archived");
+  if(toggleArchived) toggleArchived.addEventListener("click", ()=>{ showArchivedMembers = !showArchivedMembers; render(); });
 }
 
 /* ---------------------------------- DEMANDES ---------------------------------- */
@@ -449,9 +470,20 @@ function renderDemandes(){
     ${traitees.length>0? `
     <h3 class="display" style="font-size:16px;margin:20px 0 10px;">Demandes traitées (${traitees.length})</h3>
     ${traitees.map(d=>`
-      <div class="card" style="margin-bottom:8px;opacity:.7;">
-        <strong>${esc(d.prenom)} ${esc(d.nom)}</strong>
-        <span class="muted-dark" style="font-size:12px;margin-left:8px;">Identifiant créé : ${esc(d.identifiantCree||'')}</span>
+      <div class="card" style="margin-bottom:8px;">
+        <div class="between" data-toggle-demande="${d.id}" style="cursor:pointer;">
+          <div>
+            <strong>${esc(d.prenom)} ${esc(d.nom)}</strong>
+            <span class="muted-dark" style="font-size:12px;margin-left:8px;">Identifiant créé : ${esc(d.identifiantCree||'')}</span>
+          </div>
+          <span class="muted-dark" style="font-size:12px;">${demandeExpandedId===d.id? '▾ masquer' : '▸ voir les infos'}</span>
+        </div>
+        ${demandeExpandedId===d.id? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--card-lighter);">
+          <p class="muted-dark" style="font-size:12px;margin:2px 0;"><a href="mailto:${esc(d.email)}">${esc(d.email)}</a> · <a href="tel:${esc(d.gsm)}">${esc(d.gsm)}</a>${d.naissance? ` · né(e) le ${esc(d.naissance)}` : ""}</p>
+          ${d.motivation? `<p style="font-size:13px;margin:8px 0 0;color:var(--muted);"><span class="muted-dark">Pourquoi :</span> ${esc(d.motivation)}</p>` : ""}
+          <p class="muted-dark" style="font-size:11px;margin:8px 0 0;">Demande reçue le ${d.creeLe? new Date(d.creeLe).toLocaleDateString('fr-BE') : '?'}</p>
+        </div>` : ""}
       </div>`).join("")}` : ""}
   `;
 }
@@ -533,6 +565,13 @@ function attachDemandesListeners(){
   document.querySelectorAll("[data-create-from]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       creatingFrom = demandesList.find(d=>d.id===btn.dataset.createFrom) || null;
+      render();
+    });
+  });
+  document.querySelectorAll("[data-toggle-demande]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const id = el.dataset.toggleDemande;
+      demandeExpandedId = demandeExpandedId===id ? null : id;
       render();
     });
   });
@@ -1003,15 +1042,17 @@ const DEFAULT_ROI_ADMIN = `En utilisant Aurya, tu acceptes le présent règlemen
 
 1. Aurya est un outil personnel de suivi budgétaire. Les données que tu encodes (revenus, dépenses, projets d'épargne) restent ta propriété et te sont strictement personnelles.
 
-2. Si tu autorises Hélène à consulter tes données pour te conseiller, elle s'engage à en faire un usage confidentiel, uniquement dans le but de t'accompagner.
+2. Si tu renseignes des informations concernant tes enfants (prénom, date de naissance, niveau d'étude), tu le fais en tant que représentant légal, dans le seul but de personnaliser les conseils qui te sont donnés. Ces données bénéficient de la même confidentialité que le reste de ton profil et ne sont jamais utilisées à d'autres fins.
 
-3. Les conseils donnés par Hélène, que ce soit via le chat, un rendez-vous ou la page Conseils, sont donnés à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat). Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements.
+3. Si tu autorises Hélène à consulter tes données pour te conseiller, elle s'engage à en faire un usage confidentiel, uniquement dans le but de t'accompagner.
 
-4. Chaque personne reste seule responsable des décisions financières qu'elle prend, y compris sur base des échanges avec Hélène. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation d'Aurya ou de ses conseils.
+4. Les conseils donnés par Hélène, que ce soit via le chat, un rendez-vous ou la page Conseils, sont donnés à titre purement informatif et indicatif. Ils ne remplacent pas l'avis d'un professionnel agréé (comptable, conseiller financier, avocat). Hélène Laruelle n'exerce pas la profession réglementée d'expert-comptable ni de conseiller en placements.
 
-5. Ton mot de passe doit être renouvelé tous les 3 mois pour la sécurité de tes données.
+5. Chaque personne reste seule responsable des décisions financières qu'elle prend, y compris sur base des échanges avec Hélène. La responsabilité d'Hélène Laruelle ne pourra en aucun cas être engagée en cas de perte, de préjudice ou de conséquence négative liée à l'utilisation d'Aurya ou de ses conseils.
 
-6. Hélène se réserve le droit de suspendre un accès en cas d'usage abusif du service.`;
+6. Ton mot de passe doit être renouvelé tous les 3 mois pour la sécurité de tes données.
+
+7. Hélène se réserve le droit de suspendre un accès en cas d'usage abusif du service.`;
 let extraTexts = null; // { histoire, apropos, conseils, roi }
 
 async function loadSiteContent(){
