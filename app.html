@@ -415,29 +415,40 @@ const RATIO_ADVICE_TOTAL = {
   rouge: "Tes dépenses prévues dépassent presque tes revenus (ou davantage). Pas de panique : commence par repérer ce qui peut être ajusté, et n'hésite pas à en discuter avec Hélène pour construire un plan progressif.",
 };
 
-function renderAnalyseRatios(){
-  const { prevRevenu, prevDepenseTotal } = computeTotals();
-  if(prevRevenu <= 0) return "";
+function computeCategoryRows(){
+  const { prevRevenu } = computeTotals();
+  if(prevRevenu <= 0) return { prevRevenu, rows: [] };
   const depenseItems = items.filter(i=>i.type==="depense" && itemEstActif(i));
   const parCategorie = {};
   depenseItems.forEach(i=>{
     const cat = (i.categorie==="Crédits" || i.categorie==="Banque & dettes") ? "Crédits / dettes" : i.categorie;
     parCategorie[cat] = (parCategorie[cat]||0) + monthlyEquivalent(i);
   });
-  if(Object.keys(parCategorie).length===0) return "";
-
   const rows = Object.keys(parCategorie).map(cat=>{
     const montant = parCategorie[cat];
     const pct = montant / prevRevenu;
     const status = ratioStatus(pct, RATIO_RULES[cat]);
     return { cat, montant, pct, status };
   }).sort((a,b)=>b.montant-a.montant);
+  return { prevRevenu, rows };
+}
+const RATIO_STATUS_COLOR = { vert:"var(--green)", orange:"var(--gold)", rouge:"var(--coral)" };
+const RATIO_STATUS_LABEL = { vert:"OK", orange:"À surveiller", rouge:"À corriger" };
+function ratioPill(status){
+  return status? `<span class="pill" style="background:${RATIO_STATUS_COLOR[status]}26;color:${RATIO_STATUS_COLOR[status]};margin-left:8px;">${RATIO_STATUS_LABEL[status]}</span>` : "";
+}
+
+function renderAnalyseRatios(){
+  const { prevRevenu, prevDepenseTotal } = computeTotals();
+  if(prevRevenu <= 0) return "";
+  const { rows } = computeCategoryRows();
+  if(rows.length===0) return "";
 
   const pctTotal = prevDepenseTotal / prevRevenu;
   const totalStatus = pctTotal>0.9? "rouge" : pctTotal>0.7? "orange" : "vert";
-  const statusColor = { vert:"var(--green)", orange:"var(--gold)", rouge:"var(--coral)" };
-  const statusLabel = { vert:"OK", orange:"À surveiller", rouge:"À corriger" };
-  const pill = (status) => status? `<span class="pill" style="background:${statusColor[status]}26;color:${statusColor[status]};margin-left:8px;">${statusLabel[status]}</span>` : "";
+  const statusColor = RATIO_STATUS_COLOR;
+  const statusLabel = RATIO_STATUS_LABEL;
+  const pill = ratioPill;
 
   return `
   <div class="card">
@@ -751,6 +762,20 @@ function attachDashboardListeners(){
 }
 
 /* ---------------------------------- POSTES ---------------------------------- */
+function renderResumeCategoriesPostes(){
+  const { rows } = computeCategoryRows();
+  if(rows.length===0) return "";
+  return `
+    <div class="card" style="margin-bottom:20px;">
+      <h3 class="display" style="font-size:15px;margin-bottom:10px;">Résumé par catégorie — % des revenus</h3>
+      ${rows.map(r=>`
+        <div class="between" style="margin-bottom:8px;">
+          <span style="font-size:13px;">${esc(r.cat)}</span>
+          <span style="font-size:13px;white-space:nowrap;"><span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${Math.round(r.pct*100)}%${ratioPill(r.status)}</span>
+        </div>`).join("")}
+    </div>`;
+}
+
 function renderPostes(){
   const revenus = items.filter(i=>i.type==="revenu");
   const depenses = items.filter(i=>i.type==="depense");
@@ -766,6 +791,8 @@ function renderPostes(){
       </div>
       ${!postesFormOpen? `<button class="btn btn-primary" id="btn-open-poste">${ICONS.plus} Ajouter</button>` : ""}
     </div>
+
+    ${renderResumeCategoriesPostes()}
 
     <button class="suggestions-toggle" id="toggle-suggestions">${suggestionsOpen? "▾" : "▸"} Postes courants — ajoute-les en un clic</button>
     ${suggestionsOpen? renderSuggestions() : ""}
@@ -804,7 +831,7 @@ function renderPostes(){
         <div class="list-row" style="${actif?'':'opacity:.55;'}">
           <div>
             <p style="margin:0;font-weight:500;">${esc(i.nom)}${!actif? ' <span class="muted-dark">(terminé)</span>' : ''}</p>
-            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · soit ${fmtPrecise(monthlyEquivalent(i))}/mois en moyenne` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · soit ${fmtPrecise(monthlyEquivalent(i))}/mois en moyenne` : ""}${(actif && totalRev>0)? ` · ${Math.round(monthlyEquivalent(i)/totalRev*100)}% des revenus` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
           </div>
           <div style="display:flex;gap:4px;">
             <button class="icon-btn" data-edit="${i.id}">${ICONS.edit}</button>
@@ -822,7 +849,7 @@ function renderPostes(){
         <div class="list-row" style="${actif?'':'opacity:.55;'}">
           <div>
             <p style="margin:0;font-weight:500;">${esc(i.nom)}${!actif? ' <span class="muted-dark">(terminé)</span>' : ''}</p>
-            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}${(actif && totalRev>0)? ` · ${Math.round(monthlyEquivalent(i)/totalRev*100)}% des revenus` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
           </div>
           <div style="display:flex;gap:4px;">
             <button class="icon-btn" data-edit="${i.id}">${ICONS.edit}</button>
@@ -1452,7 +1479,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-023</span>
+          <span class="version-tag">V01-025</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
