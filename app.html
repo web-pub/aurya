@@ -397,12 +397,27 @@ function computeTotals(srcItems, srcProjects){
 const RATIO_RULES = {
   "Logement": { orange: 0.33, rouge: 0.40 },
   "Crédits / dettes": { orange: 0.30, rouge: 0.40 },
+  "Transport (voiture)": { orange: 0.10, rouge: 0.20 },
+  "Alimentation": { orange: 0.25, rouge: 0.40 },
+  "Énergie & eau": { orange: 0.10, rouge: 0.15 },
+  "Abonnements & télécom": { orange: 0.05, rouge: 0.10 },
+  "Loisirs": { orange: 0.05, rouge: 0.10 },
 };
+// Mots-clés utilisés pour regrouper tout ce qui concerne la voiture (crédit, assurance,
+// carburant, entretien...) même si ces postes sont classés dans d'autres catégories.
+const MOTS_CLES_VOITURE = /voiture|auto\b|carburant|essence|diesel|v[ée]hicule/i;
 function ratioStatus(pct, rule){
   if(!rule) return null;
   if(pct > rule.rouge) return "rouge";
   if(pct > rule.orange) return "orange";
   return "vert";
+}
+/* Une dépense qui existe (même minime) ne doit jamais s'afficher "0%" — trompeur.
+   En dessous de 1%, on affiche "<1%" plutôt qu'un arrondi qui donnerait 0%. */
+function formatPct(fraction){
+  const pct = fraction*100;
+  if(pct > 0 && pct < 1) return "<1%";
+  return Math.round(pct) + "%";
 }
 const RATIO_ADVICE = {
   "Logement": {
@@ -413,10 +428,35 @@ const RATIO_ADVICE = {
     orange: "Tes crédits commencent à peser. Évite d'ajouter un nouvel emprunt pour l'instant, et priorise le remboursement du crédit au taux le plus élevé.",
     rouge: "À ce niveau, un imprévu peut vite devenir compliqué à absorber. Pistes possibles : regrouper tes crédits pour réduire la mensualité, éviter tout nouvel emprunt, ou en parler à Hélène pour alléger la charge.",
   },
+  "Transport (voiture)": {
+    orange: "C'est élevé mais reste dans une fourchette correcte. Vérifie que tu profites bien de toutes les réductions possibles (assurance, entretien groupé...).",
+    rouge: "Ta voiture pèse lourd dans ton budget. Pistes : comparer les assurances, envisager un véhicule plus économique, ou évaluer les alternatives (transport en commun, covoiturage) pour les trajets réguliers.",
+  },
+  "Alimentation": {
+    orange: "Budget alimentaire élevé, mais pas forcément un problème selon ta situation (famille nombreuse, allergies, choix de qualité...). À garder à l'œil.",
+    rouge: "C'est souvent le signe d'un revenu serré ou d'un déséquilibre ailleurs plutôt qu'un vrai problème alimentaire. Vérifie d'abord si d'autres postes (crédits, logement) ne grignotent pas trop tes revenus.",
+  },
+  "Énergie & eau": {
+    orange: "C'est élevé mais gérable. Un contrôle de consommation (chauffage, isolation) peut aider à alléger la facture progressivement.",
+    rouge: "Ça vaut la peine de vérifier ton contrat énergie (comparateur de fournisseurs) et l'isolation du logement — ce sont souvent les leviers les plus efficaces.",
+  },
+  "Abonnements & télécom": {
+    orange: "C'est élevé pour ce type de poste. Vérifie si tu n'as pas des abonnements en double ou peu utilisés (streaming, forfaits).",
+    rouge: "Ce poste peut souvent être réduit facilement : regroupe tes abonnements, compare les opérateurs, et repère les services que tu n'utilises plus.",
+  },
+  "Loisirs": {
+    orange: "C'est élevé mais les loisirs comptent aussi pour l'équilibre de vie — à garder à l'œil plutôt qu'à culpabiliser.",
+    rouge: "Ça vaut la peine de suivre ce poste de plus près : fixe-toi une enveloppe mensuelle pour sorties/restos, ça aide à garder le plaisir sans déséquilibrer le reste.",
+  },
 };
 const RATIO_ADVICE_TOTAL = {
   orange: "Il te reste peu de marge chaque mois. Repère 1 ou 2 postes à ajuster, même légèrement — ça fait déjà une vraie différence.",
   rouge: "Tes dépenses prévues dépassent presque tes revenus (ou davantage). Pas de panique : commence par repérer ce qui peut être ajusté, et n'hésite pas à en discuter avec Hélène pour construire un plan progressif.",
+};
+const EPARGNE_ADVICE = {
+  rouge: "Ton taux d'épargne est en dessous de la cible de 10%. Pas de panique : repère un ou deux postes à ajuster, même petit à petit, pour t'en rapprocher progressivement.",
+  orange: "Tu épargnes déjà, mais pas encore tout à fait la cible de 10% recommandée. Encore un petit effort et tu y es.",
+  vert: "Tu atteins (ou dépasses) la cible de 10% d'épargne, bravo. Si ce que tu mets de côté dépasse largement ce qu'il te faut pour tes projets, ça vaut la peine de réfléchir à le faire fructifier (placement, investissement à long terme) plutôt que de le laisser dormir.",
 };
 
 function computeCategoryRows(){
@@ -425,7 +465,14 @@ function computeCategoryRows(){
   const depenseItems = items.filter(i=>i.type==="depense" && itemEstActif(i));
   const parCategorie = {};
   depenseItems.forEach(i=>{
-    const cat = (i.categorie==="Crédits" || i.categorie==="Banque & dettes") ? "Crédits / dettes" : i.categorie;
+    let cat;
+    if(i.categorie==="Transport" || (["Crédits","Banque & dettes","Assurances","Entretien & maison"].includes(i.categorie) && MOTS_CLES_VOITURE.test(i.nom))){
+      cat = "Transport (voiture)";
+    } else if(i.categorie==="Crédits" || i.categorie==="Banque & dettes"){
+      cat = "Crédits / dettes";
+    } else {
+      cat = i.categorie;
+    }
     parCategorie[cat] = (parCategorie[cat]||0) + monthlyEquivalent(i);
   });
   const rows = Object.keys(parCategorie).map(cat=>{
@@ -450,6 +497,8 @@ function renderAnalyseRatios(){
 
   const pctTotal = prevDepenseTotal / prevRevenu;
   const totalStatus = pctTotal>0.9? "rouge" : pctTotal>0.7? "orange" : "vert";
+  const pctEpargne = (prevRevenu - prevDepenseTotal) / prevRevenu;
+  const epargneStatus = pctEpargne>=0.10? "vert" : pctEpargne>=0.05? "orange" : "rouge";
   const statusColor = RATIO_STATUS_COLOR;
   const statusLabel = RATIO_STATUS_LABEL;
   const pill = ratioPill;
@@ -461,17 +510,25 @@ function renderAnalyseRatios(){
 
     <div class="between" style="margin-bottom:4px;">
       <span style="font-size:14px;font-weight:600;">Dépenses totales / revenus</span>
-      <span style="font-weight:700;color:${statusColor[totalStatus]};">${Math.round(pctTotal*100)}%${pill(totalStatus)}</span>
+      <span style="font-weight:700;color:${statusColor[totalStatus]};">${formatPct(pctTotal)}${pill(totalStatus)}</span>
     </div>
     <div class="progress-track" style="margin:8px 0 8px;"><div class="progress-fill" style="width:${Math.min(pctTotal*100,100)}%;background:${statusColor[totalStatus]};"></div></div>
     ${totalStatus!=='vert'? `<p style="font-size:12px;color:var(--muted);background:${statusColor[totalStatus]}14;border-radius:10px;padding:8px 10px;margin-bottom:10px;">${RATIO_ADVICE_TOTAL[totalStatus]}</p>` : ""}
+    <div style="height:8px;"></div>
+
+    <div class="between" style="margin-bottom:4px;">
+      <span style="font-size:14px;font-weight:600;">Taux d'épargne (cible : 10%)</span>
+      <span style="font-weight:700;color:${statusColor[epargneStatus]};">${formatPct(pctEpargne)}${pill(epargneStatus)}</span>
+    </div>
+    <div class="progress-track" style="margin:8px 0 8px;"><div class="progress-fill" style="width:${Math.min(Math.max(pctEpargne*100,0),100)}%;background:${statusColor[epargneStatus]};"></div></div>
+    <p style="font-size:12px;color:var(--muted);background:${statusColor[epargneStatus]}14;border-radius:10px;padding:8px 10px;margin-bottom:10px;">${EPARGNE_ADVICE[epargneStatus]}</p>
     <div style="height:8px;"></div>
 
     ${rows.map(r=>`
       <div class="between" style="margin-bottom:${r.status && r.status!=='vert' && RATIO_ADVICE[r.cat]? '4px':'10px'};">
         <span style="font-size:13px;">${esc(r.cat)}</span>
         <span style="font-size:13px;white-space:nowrap;">
-          <span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${Math.round(r.pct*100)}%${pill(r.status)}
+          <span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${formatPct(r.pct)}${pill(r.status)}
         </span>
       </div>
       ${r.status && r.status!=='vert' && RATIO_ADVICE[r.cat] ? `<p style="font-size:12px;color:var(--muted);background:${statusColor[r.status]}14;border-radius:10px;padding:8px 10px;margin-bottom:10px;">${RATIO_ADVICE[r.cat][r.status]}</p>` : ""}`).join("")}
@@ -847,7 +904,7 @@ function renderResumeCategoriesPostes(){
       ${rows.map(r=>`
         <div class="between" style="margin-bottom:8px;">
           <span style="font-size:13px;">${esc(r.cat)}</span>
-          <span style="font-size:13px;white-space:nowrap;"><span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${Math.round(r.pct*100)}%${ratioPill(r.status)}</span>
+          <span style="font-size:13px;white-space:nowrap;"><span class="muted-dark">${fmtPrecise(r.montant)}/mois ·</span> ${formatPct(r.pct)}${ratioPill(r.status)}</span>
         </div>`).join("")}
     </div>`;
 }
@@ -907,7 +964,7 @@ function renderPostes(){
         <div class="list-row" style="${actif?'':'opacity:.55;'}">
           <div>
             <p style="margin:0;font-weight:500;">${esc(i.nom)}${!actif? ' <span class="muted-dark">(terminé)</span>' : ''}</p>
-            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · soit ${fmtPrecise(monthlyEquivalent(i))}/mois en moyenne` : ""}${(actif && totalRev>0)? ` · ${Math.round(monthlyEquivalent(i)/totalRev*100)}% des revenus` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · soit ${fmtPrecise(monthlyEquivalent(i))}/mois en moyenne` : ""}${(actif && totalRev>0)? ` · ${formatPct(monthlyEquivalent(i)/totalRev)} des revenus` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
           </div>
           <div style="display:flex;gap:4px;">
             <button class="icon-btn" data-edit="${i.id}">${ICONS.edit}</button>
@@ -925,7 +982,7 @@ function renderPostes(){
         <div class="list-row" style="${actif?'':'opacity:.55;'}">
           <div>
             <p style="margin:0;font-weight:500;">${esc(i.nom)}${!actif? ' <span class="muted-dark">(terminé)</span>' : ''}</p>
-            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}${(actif && totalRev>0)? ` · ${Math.round(monthlyEquivalent(i)/totalRev*100)}% des revenus` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
+            <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${esc(i.categorie)} · ${i.frequence==='annuel'? `${fmt(i.montant)}/an` : `${fmt(i.montant)}/mois`}${i.frequence==='annuel'? ` · ${fmtPrecise(monthlyEquivalent(i))}/mois à provisionner` : ""}${(actif && totalRev>0)? ` · ${formatPct(monthlyEquivalent(i)/totalRev)} des revenus` : ""}${i.dateFin? ` · ${actif? `jusqu'au` : 'terminé le'} ${esc(i.dateFin)}` : ""}</p>
           </div>
           <div style="display:flex;gap:4px;">
             <button class="icon-btn" data-edit="${i.id}">${ICONS.edit}</button>
@@ -1173,6 +1230,53 @@ function monthsRemaining(dateStr){
 }
 
 function renderProjets(){
+  const { prevRevenu, prevDepenseTotal } = computeTotals();
+  const secoursProjet = projects.find(p=>p.typeEpargne==="secours");
+  const annuellesProjet = projects.find(p=>p.typeEpargne==="annuelles");
+  const voitureProjet = projects.find(p=>p.typeEpargne==="voiture");
+
+  const objectifSecours = Math.round(prevRevenu*6);
+  const annualDepItems = items.filter(i=>i.frequence==="annuel" && i.type==="depense" && itemEstActif(i));
+  const objectifAnnuelles = Math.round(annualDepItems.reduce((s,i)=>s+Number(i.montant),0));
+  const suggestionAnnuelles = Math.round(annualDepItems.reduce((s,i)=>s+monthlyEquivalent(i),0));
+
+  const aVoiture = items.some(i=>i.type==="depense" && itemEstActif(i) && (i.categorie==="Transport" || MOTS_CLES_VOITURE.test(i.nom)));
+  const aCreditVoiture = items.some(i=>i.type==="depense" && itemEstActif(i) && (i.categorie==="Crédits"||i.categorie==="Banque & dettes") && MOTS_CLES_VOITURE.test(i.nom));
+  const suggereVoiture = aVoiture && !aCreditVoiture;
+
+  const epargneEssentielle = `
+    <div class="card" style="margin-bottom:20px;">
+      <h3 class="display" style="font-size:16px;margin-bottom:8px;">Tes 3 épargnes essentielles</h3>
+      <p class="muted" style="font-size:13px;margin-bottom:16px;">Trois tiroirs séparés, trois objectifs différents : ça t'évite de piocher dans ton épargne "projets" pour payer une facture annuelle, ou dans ton épargne de secours pour tes vacances.</p>
+
+      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--card-lighter);">
+        <div style="flex:1;">
+          <strong style="font-size:13px;">1. Épargne de secours</strong>
+          <p class="muted-dark" style="font-size:12px;margin:4px 0 0;">L'objectif : atteindre 6 mois de revenus nets de côté, pour absorber un imprévu (perte de revenu, gros pépin) sans stress ni dette. Sur base de tes revenus actuels : ${fmt(objectifSecours)}.</p>
+        </div>
+        ${secoursProjet? `<span class="pill pill-green" style="white-space:nowrap;">Créé</span>` : `<button class="btn btn-ghost" data-create-epargne="secours" style="white-space:nowrap;">Créer ce compte</button>`}
+      </div>
+
+      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:${suggereVoiture?'14px':'0'};${suggereVoiture?'padding-bottom:14px;border-bottom:1px solid var(--card-lighter);':''}">
+        <div style="flex:1;">
+          <strong style="font-size:13px;">2. Épargne charges annuelles</strong>
+          <p class="muted-dark" style="font-size:12px;margin:4px 0 0;">${annualDepItems.length>0? `Pour couvrir tes ${annualDepItems.length} charge${annualDepItems.length>1?'s':''} annuelle${annualDepItems.length>1?'s':''} (${fmt(objectifAnnuelles)}/an) sans qu'elles ne te fassent jamais peur — ${fmt(suggestionAnnuelles)}/mois suffisent.` : `Ajoute d'abord une charge annuelle dans l'onglet Postes (assurance, taxe...) pour que ce compte se calcule automatiquement.`}</p>
+        </div>
+        ${annualDepItems.length===0? "" : annuellesProjet? `<span class="pill pill-green" style="white-space:nowrap;">Créé</span>` : `<button class="btn btn-ghost" data-create-epargne="annuelles" style="white-space:nowrap;">Créer ce compte</button>`}
+      </div>
+
+      ${suggereVoiture? `
+      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div style="flex:1;">
+          <strong style="font-size:13px;">Tu as une voiture sans crédit en cours</strong>
+          <p class="muted-dark" style="font-size:12px;margin:4px 0 0;">Tant mieux ! Mais elle finira par devoir être remplacée. Se constituer une épargne dédiée aujourd'hui évite un crédit surprise demain.</p>
+        </div>
+        ${voitureProjet? `<span class="pill pill-green" style="white-space:nowrap;">Créé</span>` : `<button class="btn btn-ghost" data-create-epargne="voiture" style="white-space:nowrap;">Créer ce compte</button>`}
+      </div>` : ""}
+
+      <p class="muted-dark" style="font-size:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--card-lighter);">3. Épargne long terme / projets — c'est tout le reste ci-dessous : tes envies, tes rêves, à ton rythme.</p>
+    </div>`;
+
   return `
     <div class="between" style="margin-bottom:20px;">
       <div>
@@ -1182,26 +1286,33 @@ function renderProjets(){
       ${!projectsFormOpen? `<button class="btn btn-primary" id="btn-open-projet">${ICONS.plus} Nouveau projet</button>` : ""}
     </div>
 
+    ${epargneEssentielle}
+
+    ${[secoursProjet, annuellesProjet, voitureProjet].filter(Boolean).length>0? `
+    <div class="grid2" style="margin-bottom:20px;">
+      ${[secoursProjet, annuellesProjet, voitureProjet].filter(Boolean).map(p=>renderProjectCard(p)).join("")}
+    </div>` : ""}
+
     ${projectsFormOpen? `
     <div class="card">
       <div class="field"><span>Nom du projet</span><input id="projet-nom" placeholder="Ex : Week-end à la mer" value="${esc(prefillProject?.nom||'')}" /></div>
       <div style="height:12px;"></div>
       <div class="grid2">
-        <div class="field"><span>Budget prévu</span><input id="projet-objectif" type="number" placeholder="Ex : 500 €" /></div>
+        <div class="field"><span>Budget prévu</span><input id="projet-objectif" type="number" placeholder="Ex : 500 €" value="${esc(prefillProject?.objectif||'')}" /></div>
         <div class="field"><span>Date visée (optionnel)</span><input id="projet-date" type="date" /></div>
       </div>
       <div style="height:12px;"></div>
-      <div class="field"><span id="projet-suggestion-label">Combien mettre de côté chaque mois (conseil : commence petit, ex 50 €)</span><input id="projet-suggestion" type="number" placeholder="50" /></div>
+      <div class="field"><span id="projet-suggestion-label">Combien mettre de côté chaque mois (conseil : commence petit, ex 50 €)</span><input id="projet-suggestion" type="number" placeholder="50" value="${esc(prefillProject?.suggestionMensuelle||'')}" /></div>
       <div class="form-actions">
         <button class="btn btn-primary" id="projet-save">Créer le projet</button>
         <button class="btn btn-ghost" id="projet-cancel">Annuler</button>
       </div>
     </div>` : ""}
 
-    ${projects.length===0 && !projectsFormOpen? `<div class="card"><p class="muted-dark" style="text-align:center;">Pas encore de projet. Et si tu te prévoyais une petite escapade ?</p></div>` : ""}
+    ${projects.length===0 && !projectsFormOpen? `<div class="card"><p class="muted-dark" style="text-align:center;">Pas encore de projet libre. Et si tu te prévoyais une petite escapade ?</p></div>` : ""}
 
     <div class="grid2">
-      ${projects.map(p=>renderProjectCard(p)).join("")}
+      ${projects.filter(p=>!p.typeEpargne).map(p=>renderProjectCard(p)).join("")}
     </div>
   `;
 }
@@ -1212,11 +1323,13 @@ function renderProjectCard(p){
   const pct = Math.min(100, Math.round((total/p.objectif)*100));
   const reste = Math.max(0, p.objectif-total);
   const moisPourFinir = p.suggestionMensuelle>0? Math.ceil(reste/p.suggestionMensuelle) : null;
+  const EPARGNE_LABELS = { secours:"Épargne de secours", annuelles:"Épargne charges annuelles", voiture:"Épargne remplacement voiture" };
 
   return `
   <div class="card" style="border:1px solid ${p.termine? 'var(--green)':'var(--card-lighter)'};">
     <div class="between" style="align-items:flex-start;margin-bottom:6px;">
       <div>
+        ${p.typeEpargne? `<span class="pill" style="background:rgba(184,154,106,0.15);color:var(--gold-dim);margin-bottom:6px;display:inline-block;">${EPARGNE_LABELS[p.typeEpargne]}</span><br/>` : ""}
         <h3 class="display" style="font-size:17px;">${esc(p.nom)}</h3>
         <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">Objectif : ${fmt(p.objectif)}${p.dateCible? ` · pour le ${new Date(p.dateCible+"T00:00:00").toLocaleDateString("fr-BE")}` : ""}</p>
       </div>
@@ -1239,6 +1352,25 @@ function renderProjectCard(p){
 function attachProjetsListeners(){
   const openBtn = document.getElementById("btn-open-projet");
   if(openBtn) openBtn.addEventListener("click", ()=>{ projectsFormOpen=true; render(); });
+
+  document.querySelectorAll("[data-create-epargne]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const { prevRevenu } = computeTotals();
+      const type = btn.dataset.createEpargne;
+      let nom, objectif, suggestionMensuelle;
+      if(type==="secours"){
+        nom = "Épargne de secours"; objectif = Math.round(prevRevenu*6); suggestionMensuelle = Math.max(1, Math.round(prevRevenu*0.05));
+      } else if(type==="annuelles"){
+        const annualDepItems = items.filter(i=>i.frequence==="annuel" && i.type==="depense" && itemEstActif(i));
+        nom = "Épargne charges annuelles"; objectif = Math.round(annualDepItems.reduce((s,i)=>s+Number(i.montant),0)); suggestionMensuelle = Math.round(annualDepItems.reduce((s,i)=>s+monthlyEquivalent(i),0));
+      } else {
+        nom = "Épargne remplacement voiture"; objectif = 8000; suggestionMensuelle = 50;
+      }
+      projects.push({ id: uid(), nom, objectif, dateCible:"", suggestionMensuelle, historique:{}, termine:false, typeEpargne: type });
+      saveProjects();
+      render();
+    });
+  });
 
   if(projectsFormOpen){
     const objectifEl = document.getElementById("projet-objectif");
@@ -1630,7 +1762,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-026</span>
+          <span class="version-tag">V01-027</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
