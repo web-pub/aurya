@@ -33,9 +33,13 @@ let posteFormCat = CATEGORIES_REVENU[0];
 
 let projectsFormOpen = false;
 let suggestionsOpen = true;
+let selectionModeOn = false;
+let selectedSuggestions = new Set(); // clés "type:idx"
 
 let comparatifYear = new Date().getFullYear();
 let comparatifChart = null;
+let reelMonth = new Date().getMonth();
+let reelExpandedCat = null;
 
 /* appStage: "loading" | "onboarding" | "app" */
 let appStage = "loading";
@@ -573,15 +577,12 @@ function renderDashboard(){
 
   let annualBlock = "";
   if(annualItems.length>0){
+    const totalAProvisionner = annualItems.reduce((s,i)=>s+monthlyEquivalent(i),0);
     annualBlock = `
     <div class="card">
-      <div class="row" style="margin-bottom:10px;"><span style="color:var(--gold);"></span><h3 class="display" style="font-size:16px;">Tes charges annuelles, mensualisées pour toi</h3></div>
-      <p class="muted" style="font-size:14px;margin-bottom:10px;">Pour que la facture ne te fasse jamais peur, on te propose de mettre un peu de côté chaque mois</p>
-      ${annualItems.map(i=>`
-        <div class="list-row">
-          <span>${esc(i.nom)}</span>
-          <span style="color:var(--gold);font-weight:600;">${fmtPrecise(monthlyEquivalent(i))} / mois <span class="muted-dark" style="font-weight:400;">(${fmt(i.montant)}/an)</span></span>
-        </div>`).join("")}
+      <div class="row" style="margin-bottom:6px;"><h3 class="display" style="font-size:16px;">À mettre de côté chaque mois</h3></div>
+      <p class="muted" style="font-size:13px;margin-bottom:10px;">Pour que tes factures annuelles ne te fassent jamais peur (détail poste par poste dans l'onglet Postes)</p>
+      <p style="font-size:26px;font-weight:700;color:var(--gold);margin:0;">${fmtPrecise(totalAProvisionner)} / mois</p>
     </div>`;
   }
 
@@ -616,72 +617,167 @@ function renderDashboard(){
     </div>
     ${annualBlock}
     ${renderAnalyseRatios()}
-    ${renderComparatif()}
   `;
 }
 
-function renderComparatif(){
-  const { prevRevenu, prevDepenseTotal } = computeTotals();
-  const data = MONTHS_SHORT.map((label, idx)=>{
-    const mk = monthKey(comparatifYear, idx);
-    const a = actuals[mk] || {};
-    return {
-      mois:label,
-      revPrev: Math.round(prevRevenu),
-      revReel: a.revenu!==undefined? Math.round(Number(a.revenu)) : null,
-      depPrev: Math.round(prevDepenseTotal),
-      depReel: a.depense!==undefined? Math.round(Number(a.depense)) : null,
-    };
-  });
-
-  const rows = data.filter(d=>d.revReel!==null || d.depReel!==null).map(d=>{
-    const soldePrev = d.revPrev - d.depPrev;
-    const hasReel = d.revReel!==null && d.depReel!==null;
-    const soldeReel = hasReel? d.revReel-d.depReel : null;
-    const respecte = hasReel && soldeReel>=soldePrev;
-    return `<tr>
-      <td>${d.mois}</td>
-      <td style="text-align:right;color:var(--muted);">${soldePrev>=0?'+':''}${soldePrev} €</td>
-      <td style="text-align:right;">${hasReel? `${soldeReel>=0?'+':''}${soldeReel} €` : '—'}</td>
-      <td style="text-align:right;">${hasReel ? (respecte? `<span class="pill pill-green">Respecté</span>` : `<span class="pill pill-coral">À surveiller</span>`) : '<span class="muted-dark">—</span>'}</td>
-    </tr>`;
-  }).join("");
-
-  const now = new Date();
-  return `
-  <div class="card" id="comparatif-card">
-    <div class="between" style="margin-bottom:16px;">
-      <div class="row"><span style="color:var(--gold);"></span><h3 class="display" style="font-size:16px;">Prévu vs Réel — vue d'ensemble ${comparatifYear}</h3></div>
-      <div class="row">
-        <button class="btn btn-ghost" id="year-prev" style="padding:6px 10px;">◀</button>
-        <span style="font-weight:600;padding:0 4px;">${comparatifYear}</span>
-        <button class="btn btn-ghost" id="year-next" style="padding:6px 10px;">▶</button>
-      </div>
-    </div>
-    <div class="chart-wrap"><canvas id="comparatif-canvas"></canvas></div>
-
-    <div class="divider" style="margin:20px 0 14px;"></div>
-    <p class="muted" style="font-size:14px;font-weight:500;margin-bottom:10px;">Encoder mes montants réels d'un mois</p>
-    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-      <div class="field" style="width:140px;"><span>Mois</span>
-        <select id="actual-month">${MONTHS_FR.map((m,idx)=>`<option value="${idx}" ${idx===now.getMonth()?'selected':''}>${m}</option>`).join("")}</select>
-      </div>
-      <div class="field" style="width:140px;"><span>Revenus réels</span><input id="actual-revenu" type="number" placeholder="€" /></div>
-      <div class="field" style="width:140px;"><span>Dépenses réelles</span><input id="actual-depense" type="number" placeholder="€" /></div>
-      <button class="btn btn-primary" id="actual-save">${ICONS.plus} Enregistrer</button>
-    </div>
-
-    <div style="margin-top:20px;overflow-x:auto;">
-      <table>
-        <thead><tr><th>Mois</th><th style="text-align:right;">Solde prévu</th><th style="text-align:right;">Solde réel</th><th style="text-align:right;">Statut</th></tr></thead>
-        <tbody>
-          ${rows || `<tr><td colspan="4" style="text-align:center;padding:20px 0;" class="muted-dark">Encode un premier mois pour voir apparaître ton comparatif</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+/* ---------------------------------- RÉEL VS BUDGET ---------------------------------- */
+function getReelMontant(itemId, mk){
+  const a = actuals[mk];
+  const v = a && a.items ? a.items[itemId] : undefined;
+  return v===undefined? null : Number(v);
+}
+function setReelMontant(itemId, mk, valeur){
+  if(!actuals[mk]) actuals[mk] = {};
+  if(!actuals[mk].items) actuals[mk].items = {};
+  if(valeur===""){ delete actuals[mk].items[itemId]; }
+  else { actuals[mk].items[itemId] = Number(valeur); }
+  saveActuals();
 }
 
+function renderReelTab(){
+  const mk = monthKey(comparatifYear, reelMonth);
+  const depenses = items.filter(i=>i.type==="depense" && itemEstActif(i));
+  const parCategorie = {};
+  depenses.forEach(i=>{ (parCategorie[i.categorie] = parCategorie[i.categorie]||[]).push(i); });
+  const categories = Object.keys(parCategorie).sort((a,b)=>{
+    const budgetA = parCategorie[a].reduce((s,i)=>s+monthlyEquivalent(i),0);
+    const budgetB = parCategorie[b].reduce((s,i)=>s+monthlyEquivalent(i),0);
+    return budgetB-budgetA;
+  });
+
+  let totalBudget = 0, totalReel = 0, totalReelConnu = 0;
+  const catSummaries = categories.map(cat=>{
+    const catItems = parCategorie[cat];
+    let budget = 0, reel = 0, tousConnus = true;
+    catItems.forEach(i=>{
+      budget += monthlyEquivalent(i);
+      const v = getReelMontant(i.id, mk);
+      if(v===null) tousConnus = false; else reel += v;
+    });
+    totalBudget += budget;
+    if(tousConnus){ totalReel += reel; totalReelConnu += reel; }
+    else { totalReel += reel; }
+    return { cat, catItems, budget, reel, tousConnus };
+  });
+
+  return `
+    <h2 class="display" style="font-size:20px;margin-bottom:4px;">Réel vs Budget</h2>
+    <p class="muted" style="font-size:14px;margin-bottom:20px;">Encode ce que tu as réellement payé, poste par poste, et compare au budget prévu.</p>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="between" style="margin-bottom:16px;">
+        <div class="row"><h3 class="display" style="font-size:16px;">Vue d'ensemble ${comparatifYear}</h3></div>
+        <div class="row">
+          <button class="btn btn-ghost" id="year-prev" style="padding:6px 10px;">◀</button>
+          <span style="font-weight:600;padding:0 4px;">${comparatifYear}</span>
+          <button class="btn btn-ghost" id="year-next" style="padding:6px 10px;">▶</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="comparatif-canvas"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="row" style="gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+        <div class="field" style="max-width:220px;"><span>Mois à encoder</span>
+          <select id="reel-month">${MONTHS_FR.map((m,idx)=>`<option value="${idx}" ${idx===reelMonth?'selected':''}>${m}</option>`).join("")}</select>
+        </div>
+        <div class="field" style="max-width:180px;"><span>Revenus réels du mois</span><input id="reel-revenu-mois" type="number" value="${(actuals[mk] && actuals[mk].revenu!==undefined)? actuals[mk].revenu : ''}" placeholder="€" /></div>
+      </div>
+      <div class="between" style="padding-top:4px;border-top:1px solid var(--card-lighter);padding-top:12px;">
+        <span style="font-size:14px;font-weight:600;">Total dépenses du mois</span>
+        <span style="font-size:14px;">
+          <span class="muted-dark">Budget :</span> <strong>${fmtPrecise(totalBudget)}</strong>
+          <span class="muted-dark" style="margin-left:10px;">Réel :</span> <strong style="color:${totalReel>totalBudget?'var(--coral-soft)':'var(--green)'};">${fmtPrecise(totalReel)}</strong>
+        </span>
+      </div>
+      <p class="muted-dark" style="font-size:11px;margin-top:6px;">Les charges annuelles (crédits, taxes...) sont comparées différemment ci-dessous : ce n'est pas parce qu'une grosse facture tombe ce mois-ci que ton budget dérape.</p>
+    </div>
+
+    ${categories.length===0? `<div class="card"><p class="muted-dark" style="text-align:center;">Ajoute d'abord des postes de dépenses dans l'onglet Postes.</p></div>` :
+      catSummaries.map(cs=>{
+        const ouvert = reelExpandedCat===cs.cat;
+        const ecart = cs.reel - cs.budget;
+        return `
+        <div class="card" style="margin-bottom:10px;padding:0;overflow:hidden;">
+          <div class="between" data-toggle-cat-reel="${esc(cs.cat)}" style="cursor:pointer;padding:16px;">
+            <div>
+              <strong style="font-size:14px;">${esc(cs.cat)}</strong>
+              <p class="muted-dark" style="font-size:12px;margin:2px 0 0;">${cs.catItems.length} poste${cs.catItems.length>1?'s':''}</p>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:13px;"><span class="muted-dark">Budget</span> ${fmtPrecise(cs.budget)}</div>
+              <div style="font-size:13px;">${cs.tousConnus? `<span class="muted-dark">Réel</span> <strong style="color:${ecart>0?'var(--coral-soft)':'var(--green)'};">${fmtPrecise(cs.reel)}</strong>` : `<span class="muted-dark">Réel partiel : ${fmtPrecise(cs.reel)}</span>`}</div>
+            </div>
+          </div>
+          ${ouvert? `
+          <div style="padding:0 16px 16px;border-top:1px solid var(--card-lighter);">
+            ${cs.catItems.map(i=>{
+              const v = getReelMontant(i.id, mk);
+              if(i.frequence==='annuel'){
+                let provisionne=0, paye=0;
+                for(let m=0; m<=reelMonth; m++){ provisionne += monthlyEquivalent(i); const vv=getReelMontant(i.id, monthKey(comparatifYear,m)); if(vv!==null) paye += vv; }
+                return `
+                <div style="border-left:2px solid var(--card-lighter);padding:12px 0 12px 14px;margin-top:12px;">
+                  <p style="margin:0 0 4px;font-size:13px;font-weight:500;">${esc(i.nom)} <span class="muted-dark">(annuel — ${fmt(i.montant)}/an)</span></p>
+                  <p class="muted-dark" style="font-size:12px;margin:0 0 8px;">Provisionné depuis janvier : ${fmtPrecise(provisionne)} · Payé réellement cette année : ${fmtPrecise(paye)}</p>
+                  <div class="field" style="max-width:180px;"><span>Payé en ${MONTHS_FR[reelMonth]} (0 si rien payé ce mois)</span><input type="number" data-reel-input="${i.id}" value="${v!==null? v : ''}" placeholder="€" /></div>
+                </div>`;
+              }
+              return `
+                <div style="border-left:2px solid var(--card-lighter);padding:10px 0 10px 14px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                  <span style="font-size:13px;">${esc(i.nom)} <span class="muted-dark">(budget ${fmtPrecise(monthlyEquivalent(i))})</span></span>
+                  <input type="number" data-reel-input="${i.id}" value="${v!==null? v : ''}" placeholder="€" style="max-width:120px;" />
+                </div>`;
+            }).join("")}
+          </div>` : ""}
+        </div>`;
+      }).join("")}
+  `;
+}
+
+function attachReelListeners(){
+  const yearPrev = document.getElementById("year-prev");
+  const yearNext = document.getElementById("year-next");
+  if(yearPrev) yearPrev.addEventListener("click", ()=>{ comparatifYear--; render(); });
+  if(yearNext) yearNext.addEventListener("click", ()=>{ comparatifYear++; render(); });
+  try{ drawComparatifChart(); }catch(e){ console.error("Erreur graphique comparatif :", e); }
+
+  const monthSelect = document.getElementById("reel-month");
+  if(monthSelect) monthSelect.addEventListener("change", ()=>{ reelMonth = Number(monthSelect.value); render(); });
+
+  const revenuMoisInput = document.getElementById("reel-revenu-mois");
+  if(revenuMoisInput) revenuMoisInput.addEventListener("change", ()=>{
+    const mk = monthKey(comparatifYear, reelMonth);
+    if(!actuals[mk]) actuals[mk] = {};
+    actuals[mk].revenu = revenuMoisInput.value===""? undefined : Number(revenuMoisInput.value);
+    saveActuals();
+  });
+
+  document.querySelectorAll("[data-toggle-cat-reel]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const cat = el.dataset.toggleCatReel;
+      reelExpandedCat = reelExpandedCat===cat ? null : cat;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-reel-input]").forEach(input=>{
+    input.addEventListener("change", ()=>{
+      const mk = monthKey(comparatifYear, reelMonth);
+      setReelMontant(input.dataset.reelInput, mk, input.value);
+      render();
+    });
+  });
+}
+
+function computeReelDepenseTotal(mk){
+  const a = actuals[mk];
+  if(!a || !a.items) return null;
+  const depenseIds = new Set(items.filter(i=>i.type==="depense").map(i=>i.id));
+  let sum=0, found=false;
+  Object.keys(a.items).forEach(id=>{ if(depenseIds.has(id)){ sum += Number(a.items[id])||0; found=true; } });
+  return found? sum : null;
+}
 function drawComparatifChart(){
   const canvas = document.getElementById("comparatif-canvas");
   if(!canvas) return;
@@ -689,12 +785,13 @@ function drawComparatifChart(){
   const data = MONTHS_SHORT.map((label, idx)=>{
     const mk = monthKey(comparatifYear, idx);
     const a = actuals[mk] || {};
+    const depReelCalc = computeReelDepenseTotal(mk);
     return {
       mois:label,
       revPrev: Math.round(prevRevenu),
       revReel: a.revenu!==undefined? Math.round(Number(a.revenu)) : null,
       depPrev: Math.round(prevDepenseTotal),
-      depReel: a.depense!==undefined? Math.round(Number(a.depense)) : null,
+      depReel: depReelCalc!==null? Math.round(depReelCalc) : (a.depense!==undefined? Math.round(Number(a.depense)) : null),
     };
   });
   if(comparatifChart) comparatifChart.destroy();
@@ -736,29 +833,8 @@ function attachDashboardListeners(){
     btn.addEventListener("click", ()=>{ activeTab="postes"; postesFormOpen=true; editingItemId=null; posteFormType="depense"; posteFormCat=CATEGORIES_DEPENSE[0]; posteFieldStash={nom:"",montant:"",frequence:"mensuel",dateFin:""}; render(); });
   });
 
-  try{ drawComparatifChart(); }catch(e){ console.error("Erreur graphique comparatif :", e); }
-
   const giftBtn = document.getElementById("btn-create-gift-project");
   if(giftBtn) giftBtn.addEventListener("click", ()=>{ prefillProject = {nom:"Mon cadeau d'anniversaire"}; activeTab="projets"; projectsFormOpen=true; render(); });
-
-  const yearPrev = document.getElementById("year-prev");
-  const yearNext = document.getElementById("year-next");
-  if(yearPrev) yearPrev.addEventListener("click", ()=>{ comparatifYear--; render(); });
-  if(yearNext) yearNext.addEventListener("click", ()=>{ comparatifYear++; render(); });
-
-  const actualSaveBtn = document.getElementById("actual-save");
-  if(actualSaveBtn) actualSaveBtn.addEventListener("click", ()=>{
-    const m = Number(document.getElementById("actual-month").value);
-    const rev = document.getElementById("actual-revenu").value;
-    const dep = document.getElementById("actual-depense").value;
-    const mk = monthKey(comparatifYear, m);
-    actuals[mk] = {
-      revenu: rev===""? undefined : Number(rev),
-      depense: dep===""? undefined : Number(dep),
-    };
-    saveActuals();
-    render();
-  });
 }
 
 /* ---------------------------------- POSTES ---------------------------------- */
@@ -857,7 +933,25 @@ function renderPostes(){
           </div>
         </div>`;}).join("")}
     </div>
+
+    ${renderPostesACompleter()}
   `;
+}
+
+function renderPostesACompleter(){
+  const aCompleter = items.filter(i=>Number(i.montant)===0);
+  if(aCompleter.length===0) return "";
+  return `
+    <div class="card dashed" id="postes-a-completer" style="margin-top:20px;">
+      <h3 class="display" style="font-size:15px;margin-bottom:4px;">Montants à compléter (${aCompleter.length})</h3>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:14px;">Postes ajoutés en sélection groupée — indique un montant pour chacun.</p>
+      ${aCompleter.map(i=>`
+        <div class="row" style="justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-size:13px;">${esc(i.nom)} <span class="muted-dark">(${esc(i.categorie)} · ${i.frequence==='annuel'?'par an':'par mois'})</span></span>
+          <input type="number" data-complete-montant="${i.id}" placeholder="€" style="max-width:120px;" />
+        </div>`).join("")}
+      <button class="btn btn-primary" id="btn-save-completer" style="margin-top:6px;">Enregistrer ces montants</button>
+    </div>`;
 }
 
 function groupByCategorie(list){
@@ -874,7 +968,11 @@ function renderChipGroup(list, type){
       <div class="chips">
         ${groups[cat].map(s=>{
           const idx = (type==='revenu'? SUGGESTIONS_REVENUS : SUGGESTIONS_DEPENSES).indexOf(s);
-          return `<button class="chip" data-suggest="${type}:${idx}">${ICONS.smallplus} ${esc(s.nom)} <span class="muted-dark">${s.frequence==='annuel'? '/an':'/mois'}</span></button>`;
+          const key = `${type}:${idx}`;
+          const selected = selectedSuggestions.has(key);
+          return selectionModeOn
+            ? `<button class="chip ${selected?'chip-selected':''}" data-select-suggest="${key}">${selected? '✓' : ICONS.smallplus} ${esc(s.nom)} <span class="muted-dark">${s.frequence==='annuel'? '/an':'/mois'}</span></button>`
+            : `<button class="chip" data-suggest="${key}">${ICONS.smallplus} ${esc(s.nom)} <span class="muted-dark">${s.frequence==='annuel'? '/an':'/mois'}</span></button>`;
         }).join("")}
       </div>
     </div>`).join("");
@@ -883,13 +981,25 @@ function renderChipGroup(list, type){
 function renderSuggestions(){
   return `
   <div class="card">
+    <div class="between" style="margin-bottom:10px;">
+      <h3 class="display" style="font-size:15px;">Postes courants</h3>
+      <button class="btn btn-ghost" id="toggle-selection-mode" style="font-size:12px;padding:6px 12px;">${selectionModeOn? 'Terminer la sélection' : 'Sélection multiple'}</button>
+    </div>
+    ${selectionModeOn? `<p class="muted-dark" style="font-size:12px;margin-bottom:10px;">Coche tous les postes dont tu as besoin, tu encoderas tous les montants d'un coup en bas de page.</p>` : ""}
     <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--green);">Revenus courants</h3></div>
     ${renderChipGroup(SUGGESTIONS_REVENUS, 'revenu')}
     <div class="divider" style="margin:14px 0;"></div>
     <div class="row" style="margin-bottom:4px;"><h3 class="display" style="font-size:15px;color:var(--coral-soft);">Dépenses courantes</h3></div>
     ${renderChipGroup(SUGGESTIONS_DEPENSES, 'depense')}
-    <p class="muted-dark" style="font-size:12px;margin-top:6px;margin-bottom:0;">Clique sur un poste pour l'ajouter, tu n'auras plus qu'à indiquer le montant</p>
-  </div>`;
+    ${!selectionModeOn? `<p class="muted-dark" style="font-size:12px;margin-top:6px;margin-bottom:0;">Clique sur un poste pour l'ajouter, tu n'auras plus qu'à indiquer le montant</p>` : ""}
+  </div>
+  ${selectionModeOn && selectedSuggestions.size>0? `
+  <div class="card dashed" style="margin-top:12px;position:sticky;bottom:12px;z-index:10;">
+    <div class="between">
+      <span style="font-size:13px;">${selectedSuggestions.size} poste${selectedSuggestions.size>1?'s':''} sélectionné${selectedSuggestions.size>1?'s':''}</span>
+      <button class="btn btn-primary" id="btn-add-selection">Ajouter cette sélection</button>
+    </div>
+  </div>` : ""}`;
 }
 
 function attachPostesListeners(){
@@ -898,6 +1008,45 @@ function attachPostesListeners(){
 
   const toggleSugg = document.getElementById("toggle-suggestions");
   if(toggleSugg) toggleSugg.addEventListener("click", ()=>{ suggestionsOpen=!suggestionsOpen; render(); });
+
+  const toggleSelMode = document.getElementById("toggle-selection-mode");
+  if(toggleSelMode) toggleSelMode.addEventListener("click", ()=>{
+    selectionModeOn = !selectionModeOn;
+    selectedSuggestions = new Set();
+    render();
+  });
+  document.querySelectorAll("[data-select-suggest]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const key = btn.dataset.selectSuggest;
+      if(selectedSuggestions.has(key)) selectedSuggestions.delete(key); else selectedSuggestions.add(key);
+      render();
+    });
+  });
+  const addSelectionBtn = document.getElementById("btn-add-selection");
+  if(addSelectionBtn) addSelectionBtn.addEventListener("click", ()=>{
+    selectedSuggestions.forEach(key=>{
+      const [type, idxStr] = key.split(":");
+      const sugg = (type==='revenu'? SUGGESTIONS_REVENUS : SUGGESTIONS_DEPENSES)[Number(idxStr)];
+      items.push({ id: uid(), type, nom: sugg.nom, categorie: sugg.categorie, frequence: sugg.frequence, montant: 0, dateFin: "" });
+    });
+    saveItems();
+    selectionModeOn = false;
+    selectedSuggestions = new Set();
+    render();
+    const completerEl = document.getElementById("postes-a-completer");
+    if(completerEl) completerEl.scrollIntoView({behavior:"smooth", block:"start"});
+  });
+
+  const saveCompleterBtn = document.getElementById("btn-save-completer");
+  if(saveCompleterBtn) saveCompleterBtn.addEventListener("click", ()=>{
+    document.querySelectorAll("[data-complete-montant]").forEach(input=>{
+      if(input.value!==""){
+        items = items.map(i => i.id===input.dataset.completeMontant ? { ...i, montant: Number(input.value) } : i);
+      }
+    });
+    saveItems();
+    render();
+  });
 
   document.querySelectorAll("[data-suggest]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
@@ -1456,6 +1605,7 @@ function renderShell(){
   const tabs = [
     {id:"accueil", label:"Accueil", icon:ICONS.home},
     {id:"postes", label:"Postes", icon:ICONS.list},
+    {id:"reel", label:"Réel vs Budget", icon:ICONS.chart},
     {id:"projets", label:"Projets", icon:ICONS.target},
     {id:"chat", label:"Discuter", icon:ICONS.chat},
     {id:"profil", label:"Profil", icon:ICONS.user},
@@ -1464,6 +1614,7 @@ function renderShell(){
   let content = "";
   if(activeTab==="accueil") content = renderDashboard();
   else if(activeTab==="postes") content = renderPostes();
+  else if(activeTab==="reel") content = renderReelTab();
   else if(activeTab==="projets") content = renderProjets();
   else if(activeTab==="chat") content = renderChat();
   else if(activeTab==="profil") content = renderProfil();
@@ -1479,7 +1630,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">${situation}</span>
-          <span class="version-tag">V01-025</span>
+          <span class="version-tag">V01-026</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -1510,6 +1661,7 @@ function attachShellListeners(){
   });
   if(activeTab==="accueil") attachDashboardListeners();
   if(activeTab==="postes") attachPostesListeners();
+  if(activeTab==="reel") attachReelListeners();
   if(activeTab==="projets") attachProjetsListeners();
   if(activeTab==="chat") attachChatListeners();
   if(activeTab==="profil") attachProfilListeners();
