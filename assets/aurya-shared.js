@@ -181,22 +181,26 @@ function translateAuthError(code){
 function renderEnfantsRows(enfants, prefix){
   if(!enfants.length) return `<p class="muted-dark" style="font-size:13px;margin:6px 0;">Aucun enfant ajouté pour l'instant.</p>`;
   return enfants.map((e, idx) => `
-    <div class="row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:flex-end;">
-      <div class="field" style="flex:1;min-width:140px;"><span>Date de naissance</span><input type="date" id="${prefix}-enfant-naissance-${idx}" value="${esc(e.naissance||'')}" /></div>
-      <div class="field" style="flex:1;min-width:160px;"><span>Niveau d'étude</span>
-        <select id="${prefix}-enfant-niveau-${idx}">
-          ${NIVEAUX_ETUDE.map(n=>`<option value="${n}" ${e.niveauEtude===n?'selected':''}>${n}</option>`).join("")}
-        </select>
+    <div class="card-narrow" style="background:var(--bg-deep);border:1px solid var(--card-lighter);border-radius:14px;padding:12px;margin-bottom:10px;max-width:none;">
+      <div class="field" style="margin-bottom:8px;"><span>Prénom</span><input id="${prefix}-enfant-prenom-${idx}" value="${esc(e.prenom||'')}" placeholder="Ex : Léo" /></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="field" style="flex:1;min-width:140px;"><span>Date de naissance</span><input type="date" id="${prefix}-enfant-naissance-${idx}" value="${esc(e.naissance||'')}" /></div>
+        <div class="field" style="flex:1;min-width:160px;"><span>Niveau d'étude</span>
+          <select id="${prefix}-enfant-niveau-${idx}">
+            ${NIVEAUX_ETUDE.map(n=>`<option value="${n}" ${e.niveauEtude===n?'selected':''}>${n}</option>`).join("")}
+          </select>
+        </div>
+        <button type="button" class="icon-btn" data-remove-enfant="${idx}" data-prefix="${prefix}" title="Retirer">${ICONS.trash}</button>
       </div>
-      <button type="button" class="icon-btn" data-remove-enfant="${idx}" data-prefix="${prefix}" title="Retirer">${ICONS.trash}</button>
     </div>`).join("");
 }
 function readEnfantsRows(count, prefix){
   const enfants = [];
   for(let i=0; i<count; i++){
+    const prenom = document.getElementById(`${prefix}-enfant-prenom-${i}`);
     const naissance = document.getElementById(`${prefix}-enfant-naissance-${i}`);
     const niveau = document.getElementById(`${prefix}-enfant-niveau-${i}`);
-    if(naissance && niveau) enfants.push({ naissance: naissance.value, niveauEtude: niveau.value });
+    if(naissance && niveau) enfants.push({ prenom: prenom? prenom.value : "", naissance: naissance.value, niveauEtude: niveau.value });
   }
   return enfants;
 }
