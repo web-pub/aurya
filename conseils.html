@@ -58,12 +58,25 @@ if(initFirebaseApp()){
       }
       const items = [];
       snap.forEach(doc => items.push(doc.data()));
-      items.sort((a,b) => (a.ordre||0) - (b.ordre||0));
-      el.innerHTML = items.map(c => `
+      items.sort((a,b) => (b.ordre||0) - (a.ordre||0));
+      el.innerHTML = items.map((c, idx) => `
         <div class="card" style="margin-bottom:14px;">
-          <h3 class="display" style="font-size:16px;margin-bottom:8px;">${esc(c.titre||"")}</h3>
-          <p style="font-size:14px;line-height:1.7;color:var(--muted);margin:0;white-space:pre-line;">${esc(c.texte||"")}</p>
+          <div class="between" data-toggle-conseil="${idx}" style="cursor:pointer;">
+            <h3 class="display" style="font-size:16px;margin:0;">${esc(c.titre||"")}</h3>
+            <span class="muted-dark" style="font-size:12px;white-space:nowrap;margin-left:10px;" id="conseil-label-${idx}">Développer</span>
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:var(--muted);margin:10px 0 0;white-space:pre-line;display:none;" id="conseil-texte-${idx}">${esc(c.texte||"")}</p>
         </div>`).join("");
+      document.querySelectorAll("[data-toggle-conseil]").forEach(el=>{
+        el.addEventListener("click", ()=>{
+          const idx = el.dataset.toggleConseil;
+          const texteEl = document.getElementById(`conseil-texte-${idx}`);
+          const labelEl = document.getElementById(`conseil-label-${idx}`);
+          const ouvert = texteEl.style.display !== "none";
+          texteEl.style.display = ouvert? "none" : "block";
+          labelEl.textContent = ouvert? "Développer" : "Réduire";
+        });
+      });
     })
     .catch(()=>{ document.getElementById("conseils-content").innerHTML = `<div class="card"><p class="muted-dark" style="text-align:center;margin:0;">Impossible de charger les conseils pour l'instant.</p></div>`; });
 }

@@ -53,6 +53,13 @@
       <div class="field"><span>Pourquoi souhaites-tu un accès à Aurya ? <span class="required-star">*</span></span>
         <textarea id="req-motivation" rows="3" style="width:100%;background:var(--bg-deep);border:1px solid var(--card-lighter);color:var(--cream);border-radius:12px;padding:10px 12px;font-family:'Inter';font-size:14px;" placeholder="Ex : je veux apprendre à mieux gérer mon budget, mettre de côté pour un projet..."></textarea>
       </div>
+      <div style="height:14px;"></div>
+      <p class="muted-dark" style="font-size:12px;margin-bottom:10px;">Optionnel — choisis déjà ton identifiant et ton mot de passe si tu veux, Hélène pourra les ajuster avant de créer ton compte.</p>
+      <div class="field"><span>Identifiant souhaité</span><input id="req-identifiant" placeholder="Ex : prenom.n" /></div>
+      <div style="height:10px;"></div>
+      <div class="field"><span>Mot de passe souhaité (6 caractères minimum)</span>
+        <div class="pwd-field"><input id="req-mdp" type="password" minlength="6" /><button type="button" class="pwd-toggle" data-toggle-target="req-mdp"></button></div>
+      </div>
       <p class="required-note">* Champs obligatoires</p>
       <p id="req-error" style="display:none;color:var(--coral);font-size:13px;margin-top:6px;"></p>
       <p id="req-success" style="display:none;color:var(--green);font-size:13px;margin-top:6px;"></p>
@@ -86,6 +93,16 @@ toggleBtn.addEventListener("click", ()=>{
   const show = pwdInput.type === "password";
   pwdInput.type = show ? "text" : "password";
   toggleBtn.innerHTML = show ? EYE_OPEN : EYE_CLOSED;
+});
+
+document.querySelectorAll(".pwd-toggle[data-toggle-target]").forEach(btn=>{
+  btn.innerHTML = EYE_CLOSED;
+  btn.addEventListener("click", ()=>{
+    const input = document.getElementById(btn.dataset.toggleTarget);
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.innerHTML = show ? EYE_OPEN : EYE_CLOSED;
+  });
 });
 
 if(!initFirebaseApp()){
@@ -130,6 +147,8 @@ if(!initFirebaseApp()){
     const gsm = document.getElementById("req-gsm").value.trim();
     const email = document.getElementById("req-email").value.trim();
     const motivation = document.getElementById("req-motivation").value.trim();
+    const identifiantSouhaite = document.getElementById("req-identifiant").value.trim();
+    const mdpSouhaite = document.getElementById("req-mdp").value;
     const errEl = document.getElementById("req-error");
     const okEl = document.getElementById("req-success");
     errEl.style.display = "none"; okEl.style.display = "none";
@@ -138,11 +157,16 @@ if(!initFirebaseApp()){
       errEl.style.display = "block";
       return;
     }
+    if(mdpSouhaite && mdpSouhaite.length < 6){
+      errEl.textContent = "Le mot de passe souhaité doit faire au moins 6 caractères (ou laisse-le vide).";
+      errEl.style.display = "block";
+      return;
+    }
     const btn = document.getElementById("req-submit");
     btn.disabled = true; btn.textContent = "Envoi...";
     try{
       await db.collection("demandes").add({
-        nom, prenom, naissance, gsm, email, motivation,
+        nom, prenom, naissance, gsm, email, motivation, identifiantSouhaite, mdpSouhaite,
         statut: "nouvelle",
         creeLe: new Date().toISOString(),
       });
@@ -154,6 +178,8 @@ if(!initFirebaseApp()){
       document.getElementById("req-gsm").value = "";
       document.getElementById("req-email").value = "";
       document.getElementById("req-motivation").value = "";
+      document.getElementById("req-identifiant").value = "";
+      document.getElementById("req-mdp").value = "";
     }catch(e){
       errEl.textContent = "Une erreur est survenue, réessaie dans un instant.";
       errEl.style.display = "block";

@@ -1,4 +1,4 @@
-// Projet : Aurya — Version V01-027
+// Projet : Aurya — Version V01-032
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -22,7 +22,9 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived']))
       );
 
-      allow delete: if false;
+      // Suppression : jamais par le membre lui-même (pour éviter un effacement accidentel),
+      // et par l'admin uniquement si le membre a explicitement demandé la suppression de son compte.
+      allow delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && resource.data.profile.suppressionDemandee == true;
     }
 
     // Liste des administrateurs (ajoutée manuellement depuis la console Firebase)
@@ -60,14 +62,18 @@ service cloud.firestore {
 
     // Demandes "Devenez membre" (formulaire public sur la page de connexion, non authentifié)
     match /demandes/{demandeId} {
-      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','naissance','motivation','email','gsm','statut','creeLe'])
+      allow create: if request.resource.data.keys().hasOnly(['nom','prenom','naissance','motivation','email','gsm','identifiantSouhaite','mdpSouhaite','statut','creeLe'])
         && request.resource.data.statut == "nouvelle"
         && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 100
         && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 100
         && request.resource.data.naissance is string && request.resource.data.naissance.size() <= 20
         && request.resource.data.motivation is string && request.resource.data.motivation.size() <= 1000
         && request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() <= 200
-        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 50;
+        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 50
+        && request.resource.data.identifiantSouhaite is string && request.resource.data.identifiantSouhaite.size() <= 50
+        && request.resource.data.mdpSouhaite is string
+        && (request.resource.data.mdpSouhaite.size() == 0 || request.resource.data.mdpSouhaite.size() >= 6)
+        && request.resource.data.mdpSouhaite.size() <= 100;
       allow read, update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 

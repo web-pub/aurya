@@ -118,7 +118,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">Admin</span>
-          <span class="version-tag">V01-027</span>
+          <span class="version-tag">V01-032</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -209,6 +209,20 @@ function renderAnniversairesBlock(){
   </div>`;
 }
 
+function renderSuppressionsBlock(){
+  const demandeurs = membersList.filter(m=>m.profile.suppressionDemandee);
+  if(demandeurs.length===0) return "";
+  return `
+  <div class="card dashed" style="margin-bottom:16px;border-color:var(--coral-soft);">
+    <h3 class="display" style="font-size:15px;margin-bottom:10px;">Demandes de suppression de compte (${demandeurs.length})</h3>
+    ${demandeurs.map(m=>`
+      <div class="row" style="justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:13px;">${esc(m.profile.prenom||"(sans prénom)")} <span class="muted-dark">— ${esc(m.profile.email||"")}</span></span>
+        <button class="btn btn-ghost" data-valider-suppression="${m.uid}" style="color:var(--coral-soft);">Valider la suppression</button>
+      </div>`).join("")}
+  </div>`;
+}
+
 function renderMembres(){
   if(selectedMember) return renderMemberDetail(selectedMember);
   if(membersList === null || membersList === "loading"){
@@ -226,13 +240,13 @@ function renderMembres(){
       <button class="btn btn-ghost" id="btn-toggle-archived" style="font-size:12px;padding:6px 12px;">${showArchivedMembers? 'Masquer les archivés' : `Voir aussi les membres archivés (${archives.length})`}</button>
     </div>`;
 
-  return renderAnniversairesBlock() + (archives.length>0? toggleRow : "") + visibles.map(m=>{
+  return renderAnniversairesBlock() + renderSuppressionsBlock() + (archives.length>0? toggleRow : "") + visibles.map(m=>{
     const t = computeTotalsFor(m.items, m.projects);
     const consent = m.profile.consentementAdmin;
     return `
     <div class="member-row" data-select-member="${m.uid}" style="${m.archived?'opacity:.55;':''}">
       <div>
-        <strong>${esc(m.profile.prenom||"(sans prénom)")}</strong>${m.archived? ' <span class="muted-dark">(archivé)</span>' : ''}
+        <strong>${esc(m.profile.prenom||"(sans prénom)")}</strong>${m.archived? ' <span class="muted-dark">(archivé)</span>' : ''}${m.profile.suppressionDemandee? ' <span style="color:var(--coral-soft);">(suppression demandée)</span>' : ''}
         <span class="muted-dark" style="font-size:12px;margin-left:8px;">${esc(m.profile.email||"")}</span>
         <p class="muted-dark" style="font-size:11px;margin:2px 0 0;">${formatDerniereConnexion(m.profile.derniereConnexion)}</p>
       </div>
@@ -422,6 +436,36 @@ function attachMembresListeners(){
   }
 
   if(membersList === null){ loadMembers(); return; }
+  document.querySelectorAll("[data-valider-suppression]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const uid = btn.dataset.validerSuppression;
+      const m = membersList.find(x=>x.uid===uid);
+      if(!m) return;
+      if(!confirm(`Supprimer définitivement le compte de ${m.profile.prenom||"ce membre"} ? Cette action est irréversible.`)) return;
+      btn.disabled = true; btn.textContent = "Suppression...";
+      // Si le mot de passe généré est encore connu, on en profite pour supprimer aussi
+      // le compte Firebase Authentication proprement (sinon il faudra le faire à la main
+      // depuis la console Firebase — le mot de passe actuel n'est alors plus connu).
+      if(m.profile._pwdPlain && m.profile.email){
+        try{
+          const secondaryAuth = getSecondaryFirebaseApp().auth();
+          const cred = await secondaryAuth.signInWithEmailAndPassword(m.profile.email, m.profile._pwdPlain);
+          await cred.user.delete();
+          await secondaryAuth.signOut();
+        }catch(e){ console.error("Suppression Auth impossible, seule la donnée sera supprimée :", e); }
+      }
+      try{
+        await fbDb.collection("auryaUsers").doc(uid).delete();
+        membersList = membersList.filter(x=>x.uid!==uid);
+        render();
+      }catch(e){
+        console.error(e);
+        alert("Erreur lors de la suppression. Réessaie ou vérifie les règles Firestore.");
+        btn.disabled = false; btn.textContent = "Valider la suppression";
+      }
+    });
+  });
+
   document.querySelectorAll("[data-select-member]").forEach(row=>{
     row.addEventListener("click", ()=>{
       selectedMember = membersList.find(m=>m.uid===row.dataset.selectMember) || null;
@@ -462,6 +506,7 @@ function renderDemandes(){
             <strong>${esc(d.prenom)} ${esc(d.nom)}</strong>
             <p class="muted-dark" style="font-size:12px;margin:2px 0 0;"><a href="mailto:${esc(d.email)}">${esc(d.email)}</a> · <a href="tel:${esc(d.gsm)}">${esc(d.gsm)}</a>${d.naissance? ` · né(e) le ${esc(d.naissance)}` : ""}</p>
             ${d.motivation? `<p style="font-size:13px;margin:8px 0 0;color:var(--muted);"><span class="muted-dark">Pourquoi :</span> ${esc(d.motivation)}</p>` : ""}
+            ${d.identifiantSouhaite || d.mdpSouhaite? `<p class="muted-dark" style="font-size:12px;margin:8px 0 0;">Souhaite : ${d.identifiantSouhaite? `identifiant "${esc(d.identifiantSouhaite)}"` : ""}${d.identifiantSouhaite && d.mdpSouhaite? " · " : ""}${d.mdpSouhaite? `mot de passe "${esc(d.mdpSouhaite)}"` : ""}</p>` : ""}
           </div>
           <button class="btn btn-primary" data-create-from="${d.id}">Créer le compte</button>
         </div>
@@ -493,16 +538,16 @@ function renderCreationDepuisDemande(d){
     <button class="btn btn-ghost" id="btn-cancel-creation" style="margin-bottom:16px;">← Annuler</button>
     <div class="card">
       <h3 class="display" style="font-size:16px;margin-bottom:10px;">Créer le compte de ${esc(d.prenom)} ${esc(d.nom)}</h3>
-      <div class="field"><span>Identifiant</span><input id="create-identifiant" value="${esc(genererIdentifiant(d.prenom, d.nom))}" /></div>
+      <div class="field"><span>Identifiant</span><input id="create-identifiant" value="${esc(d.identifiantSouhaite || genererIdentifiant(d.prenom, d.nom))}" /></div>
       <div style="height:10px;"></div>
       <div class="field">
         <span>Mot de passe</span>
         <div class="pwd-field">
-          <input id="create-password" type="password" value="${esc(genererMotDePasse(d.prenom, d.nom, null))}" />
+          <input id="create-password" type="password" value="${esc(d.mdpSouhaite || genererMotDePasse(d.prenom, d.nom, null))}" />
           <button type="button" class="pwd-toggle" id="toggle-create-pwd">${ICONS.eye}</button>
         </div>
       </div>
-      <p class="muted-dark" style="font-size:12px;margin-top:8px;">Identifiant et mot de passe pré-remplis selon la règle habituelle, modifiables avant validation.</p>
+      <p class="muted-dark" style="font-size:12px;margin-top:8px;">${d.identifiantSouhaite || d.mdpSouhaite? "Pré-rempli avec ce que le membre a demandé, modifiable avant validation." : "Identifiant et mot de passe pré-remplis selon la règle habituelle, modifiables avant validation."}</p>
       <p id="create-feedback" style="display:none;font-size:13px;margin-top:8px;"></p>
       <div style="height:14px;"></div>
       <button class="btn btn-primary" id="btn-confirm-create">Créer le compte</button>
@@ -759,11 +804,11 @@ function attachLivreOrListeners(){
 
 /* ---------------------------------- CONSEILS (page publique) ---------------------------------- */
 const CONSEILS_SEED = [
-  {titre:"1. Épargne dès que tu touches ton salaire", texte:"Ne mets pas de côté \"ce qu'il reste\" à la fin du mois — c'est le meilleur moyen de ne jamais rien épargner. Vire un montant fixe vers ton épargne dès que ton salaire arrive, même modeste. Tu t'habitues à vivre avec le reste, et l'épargne devient automatique plutôt qu'une intention."},
-  {titre:"2. Établis un budget mensuel réaliste", texte:"Liste tes revenus fixes et toutes tes charges (loyer ou crédit, énergie, assurances, alimentation, transport...). Tu sauras exactement combien il te reste réellement à dépenser chaque mois, sans mauvaise surprise."},
-  {titre:"3. Prévois un fonds d'urgence", texte:"Vise l'équivalent de 3 à 6 mois de dépenses de côté, séparément de ton épargne \"projets\". C'est ce qui t'évite de t'endetter au premier imprévu (voiture, santé, réparation)."},
-  {titre:"4. Mensualise tes charges annuelles", texte:"Assurances, taxes, entretien de la chaudière... Plutôt que de subir une grosse facture une fois par an, divise-la par 12 et mets ce montant de côté chaque mois. C'est exactement ce qu'Aurya fait pour toi automatiquement."},
-  {titre:"5. Distingue besoins et envies", texte:"Avant un achat, demande-toi s'il s'agit d'un besoin ou d'une envie — les deux ont leur place, mais pas dans les mêmes proportions. Et fais le tri une à deux fois par an dans tes abonnements : beaucoup finissent oubliés alors qu'ils continuent d'être prélevés."},
+  {titre:"Épargne dès que ton salaire arrive", texte:"Ne mets pas de côté \"ce qu'il reste\" à la fin du mois — c'est le meilleur moyen de ne jamais rien épargner. Vire un montant fixe vers ton épargne dès que ton salaire arrive, même modeste. Tu t'habitues à vivre avec le reste, et l'épargne devient automatique plutôt qu'une intention."},
+  {titre:"Un budget mensuel réaliste change tout", texte:"Liste tes revenus fixes et toutes tes charges (loyer ou crédit, énergie, assurances, alimentation, transport...). Tu sauras exactement combien il te reste réellement à dépenser chaque mois, sans mauvaise surprise."},
+  {titre:"Sans fonds d'urgence, le moindre imprévu devient une crise", texte:"Vise l'équivalent de 3 à 6 mois de dépenses de côté, séparément de ton épargne \"projets\". C'est ce qui t'évite de t'endetter au premier imprévu (voiture, santé, réparation)."},
+  {titre:"Les grosses factures ne doivent jamais te surprendre", texte:"Assurances, taxes, entretien de la chaudière... Plutôt que de subir une grosse facture une fois par an, divise-la par 12 et mets ce montant de côté chaque mois. C'est exactement ce qu'Aurya fait pour toi automatiquement."},
+  {titre:"Besoin ou envie ? La question qui change tout", texte:"Avant un achat, demande-toi s'il s'agit d'un besoin ou d'une envie — les deux ont leur place, mais pas dans les mêmes proportions. Et fais le tri une à deux fois par an dans tes abonnements : beaucoup finissent oubliés alors qu'ils continuent d'être prélevés."},
 ];
 
 async function loadConseilsAdmin(){
@@ -895,23 +940,27 @@ function renderMotsDePasse(){
     return `<div class="card"><p class="muted-dark" style="text-align:center;">Aucun mot de passe enregistré ici (seuls les comptes créés depuis l'onglet Demandes en gardent une copie).</p></div>`;
   }
   return `
-    <div class="card">
-      <table>
-        <thead><tr><th>Membre</th><th>Identifiant</th><th>Mot de passe</th><th>Dernière connexion</th></tr></thead>
-        <tbody>
-          ${withPwd.map(m=>`
-          <tr>
-            <td>${esc(m.profile.prenom||'')}</td>
-            <td>${esc(m.profile.email||'')}</td>
-            <td>
-              <span class="pwd-masked" data-pwd="${esc(m.profile._pwdPlain)}">••••••••</span>
-              <button class="icon-btn" data-toggle-pwd>${ICONS.eye}</button>
-            </td>
-            <td style="font-size:12px;color:var(--muted-dark);">${formatDerniereConnexion(m.profile.derniereConnexion)}</td>
-          </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
+    ${withPwd.map(m=>`
+    <div class="card" style="margin-bottom:10px;">
+      <p style="margin:0 0 8px;font-weight:600;font-size:14px;">${esc(m.profile.prenom||'(sans prénom)')}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;">
+        <div>
+          <p class="muted-dark" style="font-size:11px;margin:0 0 2px;">Identifiant</p>
+          <p style="font-size:13px;margin:0;word-break:break-all;">${esc(m.profile.email||'')}</p>
+        </div>
+        <div>
+          <p class="muted-dark" style="font-size:11px;margin:0 0 2px;">Mot de passe</p>
+          <p style="font-size:13px;margin:0;display:flex;align-items:center;gap:6px;">
+            <span class="pwd-masked" data-pwd="${esc(m.profile._pwdPlain)}">••••••••</span>
+            <button class="icon-btn" data-toggle-pwd style="padding:2px;">${ICONS.eye}</button>
+          </p>
+        </div>
+        <div>
+          <p class="muted-dark" style="font-size:11px;margin:0 0 2px;">Dernière connexion</p>
+          <p style="font-size:12px;color:var(--muted-dark);margin:0;">${formatDerniereConnexion(m.profile.derniereConnexion)}</p>
+        </div>
+      </div>
+    </div>`).join("")}
   `;
 }
 function attachMotsDePasseListeners(){
