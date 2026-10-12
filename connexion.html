@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Aurya — Connexion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -111,7 +113,9 @@ if(!initFirebaseApp()){
 } else {
   const auth = firebase.auth();
   const db = firebase.firestore();
+  let redirecting = false;
   async function redirectAfterLogin(user){
+    if(redirecting) return; redirecting = true;
     try{
       const adminSnap = await db.collection("admins").doc(user.uid).get();
       window.location.href = adminSnap.exists ? "admin.html" : "app.html";

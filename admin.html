@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Aurya — Espace conseil</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -118,7 +120,7 @@ function renderShell(){
         <span class="brand-slogan">Chaque euro trouve sa place.</span>
         <div class="status-row">
           <span class="status-badge">Admin</span>
-          <span class="version-tag">V01-032</span>
+          <span class="version-tag">V01-035</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -485,6 +487,11 @@ async function loadDemandes(){
     const list = [];
     snap.forEach(doc=> list.push({ id: doc.id, ...doc.data() }));
     demandesList = list;
+    // Nettoyage sécurité : un mot de passe souhaité ne doit pas rester en clair une fois la demande traitée
+    list.filter(d=>d.statut==="traitee" && d.mdpSouhaite).forEach(d=>{
+      fbDb.collection("demandes").doc(d.id).update({ mdpSouhaite: firebase.firestore.FieldValue.delete() }).catch(()=>{});
+      delete d.mdpSouhaite;
+    });
   }catch(e){ console.error(e); demandesList = []; }
   render();
 }
@@ -593,7 +600,7 @@ function attachDemandesListeners(){
           pwdChangedAt: new Date().toISOString(),
         };
         await fbDb.collection("auryaUsers").doc(newUid).set({ profile:newProfile, items:[], projects:[], actuals:{} });
-        await fbDb.collection("demandes").doc(creatingFrom.id).set({ statut:"traitee", identifiantCree:identifiant }, { merge:true });
+        await fbDb.collection("demandes").doc(creatingFrom.id).set({ statut:"traitee", identifiantCree:identifiant, mdpSouhaite:firebase.firestore.FieldValue.delete() }, { merge:true });
 
         demandesList = demandesList.map(x=> x.id===creatingFrom.id? {...x, statut:"traitee", identifiantCree:identifiant} : x);
         creatingFrom = null;
